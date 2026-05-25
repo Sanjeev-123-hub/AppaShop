@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login Pannu - Appa Kadai</title>
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <!-- <link rel="stylesheet" href="main.css"> -->
+</head>
+<body>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<div class="auth-page">
+  <div class="auth-card">
+
+    <div class="auth-logo">
+      <div class="shop-icon">🛒</div>
+      <h1>Appa Kadai</h1>
+      <p>Namma ooru kadai</p>
+    </div>
+
+    <!-- LOGIN FORM -->
+    <div id="loginForm">
+      <h2 style="font-family:var(--font-head);font-size:1.2rem;margin-bottom:16px;color:var(--text)">
+        Login Pannu 👋
+      </h2>
+
+      <div class="form-group">
+        <label><i class="fas fa-envelope"></i> Email</label>
+        <input type="email" id="loginEmail" placeholder="உங்கள் email..." />
+      </div>
+
+      <div class="form-group">
+        <label><i class="fas fa-lock"></i> Password</label>
+        <div style="position:relative">
+          <input type="password" id="loginPassword" placeholder="Password..." style="padding-right:40px" />
+          <i class="fas fa-eye" id="toggleLoginPwd"
+             style="position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--text-muted)"></i>
+        </div>
+      </div>
+
+      <button class="btn btn-green btn-full" id="loginBtn" style="margin-top:6px">
+        <i class="fas fa-sign-in-alt"></i> Login Pannu
+      </button>
+
+      <div style="text-align:center;margin:14px 0;color:var(--text-muted);font-size:0.82rem">— OR —</div>
+
+      <button class="btn btn-outline btn-full" id="googleBtn">
+        <i class="fab fa-google"></i> Google-la Login Pannu
+      </button>
+
+      <div class="auth-switch">
+        Pudhusu vanthurukkingala? <a onclick="toggleForm()">Account Pannu (Signup)</a>
+      </div>
+    </div>
+
+    <!-- SIGNUP FORM -->
+    <div id="signupForm" style="display:none">
+      <h2 style="font-family:var(--font-head);font-size:1.2rem;margin-bottom:16px;color:var(--text)">
+        Account Pannu 🆕
+      </h2>
+
+      <div class="form-group">
+        <label><i class="fas fa-user"></i> Peyar (Name)</label>
+        <input type="text" id="signupName" placeholder="உங்கள் பெயர்..." />
+      </div>
+
+      <div class="form-group">
+        <label><i class="fas fa-phone"></i> Phone</label>
+        <input type="tel" id="signupPhone" placeholder="Phone number..." />
+      </div>
+
+      <div class="form-group">
+        <label><i class="fas fa-envelope"></i> Email</label>
+        <input type="email" id="signupEmail" placeholder="உங்கள் email..." />
+      </div>
+
+      <div class="form-group">
+        <label><i class="fas fa-lock"></i> Password</label>
+        <input type="password" id="signupPassword" placeholder="6+ characters..." />
+      </div>
+
+      <button class="btn btn-green btn-full" id="signupBtn" style="margin-top:6px">
+        <i class="fas fa-user-plus"></i> Account Pannu
+      </button>
+
+      <div class="auth-switch">
+        Already account irukka? <a onclick="toggleForm()">Login Pannu</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+// =============================================
+// 🔐 Auth Page Logic
+// =============================================
+
+// Toggle between login and signup
+function toggleForm() {
+  const lf = document.getElementById("loginForm");
+  const sf = document.getElementById("signupForm");
+  lf.style.display = lf.style.display === "none" ? "block" : "none";
+  sf.style.display = sf.style.display === "none" ? "block" : "none";
+}
+
+// If already logged in, redirect
+auth.onAuthStateChanged(user => {
+  if (user) window.location.href = "../index.html";
+});
+
+// Toggle password visibility
+document.getElementById("toggleLoginPwd").addEventListener("click", function () {
+  const input = document.getElementById("loginPassword");
+  input.type = input.type === "password" ? "text" : "password";
+  this.classList.toggle("fa-eye");
+  this.classList.toggle("fa-eye-slash");
+});
+
+// ── LOGIN ──
+document.getElementById("loginBtn").addEventListener("click", async () => {
+  const email    = document.getElementById("loginEmail").value.trim();
+  const password = document.getElementById("loginPassword").value;
+  const btn      = document.getElementById("loginBtn");
+
+  if (!email || !password) { showToast("Email matrum password kudunga!", "error"); return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Wait pannu...';
+
+  try {
+    await auth.signInWithEmailAndPassword(email, password);
+    showToast("Welcome back! 🎉");
+    setTimeout(() => window.location.href = "../index.html", 800);
+  } catch (err) {
+    let msg = "Login aagalai. Maarum try pannu.";
+    if (err.code === "auth/wrong-password")   msg = "Password tappaa iruku!";
+    if (err.code === "auth/user-not-found")   msg = "Account illai. Signup pannu!";
+    if (err.code === "auth/invalid-email")    msg = "Email correct-aa type pannu!";
+    showToast(msg, "error");
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Login Pannu';
+  }
+});
+
+// ── GOOGLE LOGIN ──
+document.getElementById("googleBtn").addEventListener("click", async () => {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  try {
+    const result = await auth.signInWithPopup(provider);
+    const user = result.user;
+    // Save to Firestore if new user
+    const userDoc = await db.collection("users").doc(user.uid).get();
+    if (!userDoc.exists) {
+      await db.collection("users").doc(user.uid).set({
+        name:      user.displayName || "Customer",
+        email:     user.email,
+        phone:     user.phoneNumber || "",
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+    showToast(`Welcome, ${user.displayName}! 🎉`);
+    setTimeout(() => window.location.href = "../index.html", 800);
+  } catch (err) {
+    showToast("Google login aagalai!", "error");
+    console.error(err);
+  }
+});
+
+// ── SIGNUP ──
+document.getElementById("signupBtn").addEventListener("click", async () => {
+  const name     = document.getElementById("signupName").value.trim();
+  const phone    = document.getElementById("signupPhone").value.trim();
+  const email    = document.getElementById("signupEmail").value.trim();
+  const password = document.getElementById("signupPassword").value;
+  const btn      = document.getElementById("signupBtn");
+
+  if (!name || !email || !password) { showToast("Ellam fill pannu!", "error"); return; }
+  if (password.length < 6)          { showToast("Password 6+ letters venum!", "error"); return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+
+  try {
+    const cred = await auth.createUserWithEmailAndPassword(email, password);
+    await cred.user.updateProfile({ displayName: name });
+
+    // Save user to Firestore
+    await db.collection("users").doc(cred.user.uid).set({
+      name, email, phone,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    showToast("Account ready! Welcome 🎉");
+    setTimeout(() => window.location.href = "../index.html", 800);
+  } catch (err) {
+    let msg = "Signup aagalai. Try pannu.";
+    if (err.code === "auth/email-already-in-use") msg = "Email already use-la iruku!";
+    if (err.code === "auth/weak-password")        msg = "Password weak aa iruku!";
+    showToast(msg, "error");
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-user-plus"></i> Account Pannu';
+  }
+});
+</script>
+</body>
+</html>

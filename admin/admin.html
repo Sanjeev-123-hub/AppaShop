@@ -1,0 +1,2559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Appa Kadai — Admin Dashboard</title>
+
+  <!-- Font Awesome icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+  <!--
+    Firebase v9 compat SDK
+    These three scripts give us: firebase.initializeApp(), db (Firestore), auth (Auth)
+    They are loaded BEFORE firebase-config.js which calls initializeApp()
+  -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+
+<style>
+/* ═══════════════════════════════════════════════════
+   CSS CUSTOM PROPERTIES  (change these to retheme)
+═══════════════════════════════════════════════════ */
+:root {
+  /* Brand greens */
+  --green-dark : #1b5e20;
+  --green      : #2e7d32;
+  --green-mid  : #43a047;
+  --green-bg   : #e8f5e9;
+
+  /* Status colours */
+  --orange     : #e65100;  --orange-bg : #fff3e0;
+  --red        : #c62828;  --red-bg    : #ffebee;
+  --blue       : #1565c0;  --blue-bg   : #e3f2fd;
+  --purple     : #5f259f;  --purple-bg : #f3e5f5;
+  --teal       : #00695c;  --teal-bg   : #e0f2f1;
+
+  /* Layout */
+  --sidebar-w  : 245px;
+  --bg         : #f0f2f5;
+  --card       : #ffffff;
+  --text       : #1a1a1a;
+  --sub        : #64748b;
+  --border     : #e2e8f0;
+  --radius     : 14px;
+  --shadow     : 0 1px 4px rgba(0,0,0,.07), 0 4px 16px rgba(0,0,0,.05);
+}
+
+/* ─── Reset ─────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
+}
+
+/* ═══════════════════════════════════════════════════
+   SIDEBAR NAVIGATION
+═══════════════════════════════════════════════════ */
+.sidebar {
+  position: fixed;
+  left: 0; top: 0; bottom: 0;
+  width: var(--sidebar-w);
+  background: linear-gradient(180deg, #162d18 0%, #1b5e20 45%, #2e7d32 100%);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  z-index: 200;
+  box-shadow: 4px 0 28px rgba(0,0,0,.22);
+  transition: transform .28s ease;
+  overflow-y: auto;
+}
+
+/* Brand logo area */
+.sb-logo {
+  padding: 24px 20px 20px;
+  border-bottom: 1px solid rgba(255,255,255,.1);
+  flex-shrink: 0;
+}
+.sb-logo-title {
+  font-size: 1.18rem;
+  font-weight: 800;
+  letter-spacing: -.2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sb-logo-sub {
+  font-size: .68rem;
+  opacity: .55;
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+}
+
+/* Section group label */
+.sb-group {
+  padding: 16px 20px 4px;
+  font-size: .62rem;
+  font-weight: 700;
+  opacity: .38;
+  text-transform: uppercase;
+  letter-spacing: .14em;
+}
+
+/* Individual nav items */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  margin: 2px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: .88rem;
+  transition: background .15s;
+  position: relative;
+  user-select: none;
+}
+.nav-item:hover  { background: rgba(255,255,255,.1); }
+.nav-item.active { background: rgba(255,255,255,.2); font-weight: 700; }
+.nav-item i      { width: 18px; text-align: center; font-size: .9rem; opacity: .88; }
+
+/* Live count badge on nav item */
+.nav-badge {
+  position: absolute;
+  right: 13px;
+  min-width: 20px;
+  height: 20px;
+  background: #ef5350;
+  color: #fff;
+  border-radius: 20px;
+  font-size: .62rem;
+  font-weight: 800;
+  display: none;               /* shown by JS when count > 0 */
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+}
+
+/* Sidebar footer: user email + logout */
+.sb-footer { margin-top: auto; flex-shrink: 0; }
+.sb-user   {
+  padding: 10px 20px;
+  font-size: .72rem;
+  opacity: .5;
+  word-break: break-all;
+  border-top: 1px solid rgba(255,255,255,.07);
+}
+.sb-logout {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 20px;
+  cursor: pointer;
+  color: #ffcdd2;
+  font-size: .88rem;
+  border-top: 1px solid rgba(255,255,255,.08);
+  transition: background .15s;
+}
+.sb-logout:hover { background: rgba(255,0,0,.18); }
+
+/* ═══════════════════════════════════════════════════
+   MAIN CONTENT AREA
+═══════════════════════════════════════════════════ */
+.main {
+  margin-left: var(--sidebar-w);
+  min-height: 100vh;
+  padding: 28px 28px 80px;
+}
+
+/* Page header (title + subtitle) */
+.page-hd { margin-bottom: 24px; }
+.page-hd h1 {
+  font-size: 1.5rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.page-hd p { color: var(--sub); font-size: .88rem; margin-top: 5px; }
+
+/* Refresh button (top-right of page header) */
+.refresh-btn {
+  float: right;
+  padding: 8px 15px;
+  background: var(--green-bg);
+  color: var(--green);
+  border: none;
+  border-radius: 9px;
+  font-size: .82rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background .15s;
+}
+.refresh-btn:hover { background: #c8e6c9; }
+
+/* ═══════════════════════════════════════════════════
+   PANEL SYSTEM  (one panel = one "page")
+═══════════════════════════════════════════════════ */
+.panel         { display: none; }
+.panel.active  { display: block; }
+
+/* ═══════════════════════════════════════════════════
+   STAT / KPI CARDS  (overview grid)
+═══════════════════════════════════════════════════ */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.stat-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 20px 16px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: transform .2s;
+  cursor: default;
+}
+.stat-card:hover { transform: translateY(-2px); }
+
+.stat-icon {
+  width: 42px; height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+}
+.stat-val { font-size: 1.8rem; font-weight: 900; line-height: 1; letter-spacing: -.5px; }
+.stat-lbl { font-size: .74rem; color: var(--sub); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+
+/* Revenue card: full-width gradient highlight */
+.stat-card.revenue {
+  background: linear-gradient(135deg, var(--green-dark), var(--green));
+  color: #fff;
+  grid-column: span 2;        /* takes 2 columns on desktop */
+}
+.stat-card.revenue .stat-val  { color: #fff; font-size: 2.2rem; }
+.stat-card.revenue .stat-lbl  { color: rgba(255,255,255,.72); }
+.stat-card.revenue .stat-icon { background: rgba(255,255,255,.15); color: #fff; }
+.stat-card.revenue .stat-sub  { font-size: .78rem; color: rgba(255,255,255,.6); margin-top: 2px; }
+
+/* ═══════════════════════════════════════════════════
+   SECTION HEADER  (title + right-side controls)
+═══════════════════════════════════════════════════ */
+.sec-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.sec-hd h2 { font-size: 1rem; font-weight: 700; }
+.sec-hd-r  { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* ═══════════════════════════════════════════════════
+   SEARCH BAR + FILTER SELECT
+═══════════════════════════════════════════════════ */
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 9px;
+  padding: 7px 12px;
+}
+.search-bar:focus-within { border-color: var(--green-mid); }
+.search-bar i     { color: #ccc; font-size: .85rem; flex-shrink: 0; }
+.search-bar input { border: none; outline: none; font-size: .87rem; background: transparent; width: 180px; }
+
+.sel {
+  padding: 8px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: 9px;
+  font-size: .85rem;
+  outline: none;
+  background: var(--card);
+  cursor: pointer;
+  color: var(--text);
+}
+.sel:focus { border-color: var(--green-mid); }
+
+/* ═══════════════════════════════════════════════════
+   DATA TABLE
+═══════════════════════════════════════════════════ */
+.tbl-wrap {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: auto;             /* horizontal scroll on small screens */
+  margin-bottom: 24px;
+}
+
+table { width: 100%; border-collapse: collapse; min-width: 520px; }
+
+thead th {
+  background: #f8fafc;
+  font-size: .71rem;
+  font-weight: 700;
+  color: var(--sub);
+  padding: 11px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  white-space: nowrap;
+}
+tbody td {
+  padding: 12px 14px;
+  font-size: .87rem;
+  border-bottom: 1px solid #f8fafc;
+  vertical-align: middle;
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td      { background: #fafbfc; }
+
+/* ═══════════════════════════════════════════════════
+   STATUS BADGES
+═══════════════════════════════════════════════════ */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  white-space: nowrap;
+  letter-spacing: .04em;
+}
+.b-placed    { background: var(--blue-bg);   color: var(--blue);   }
+.b-confirmed { background: var(--orange-bg); color: var(--orange); }
+.b-delivered { background: var(--green-bg);  color: var(--green);  }
+.b-cancelled { background: var(--red-bg);    color: var(--red);    }
+.b-pending   { background: var(--orange-bg); color: var(--orange); }
+.b-partial   { background: var(--purple-bg); color: var(--purple); }
+.b-paid      { background: var(--green-bg);  color: var(--green-mid); }
+
+/* ═══════════════════════════════════════════════════
+   BUTTONS
+═══════════════════════════════════════════════════ */
+.btn {
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-size: .82rem;
+  font-weight: 600;
+  transition: filter .15s;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.btn:hover         { filter: brightness(.93); }
+.btn:active        { filter: brightness(.86); }
+.btn:disabled      { opacity: .55; cursor: not-allowed; }
+.btn-green         { background: var(--green-bg);  color: var(--green);  }
+.btn-orange        { background: var(--orange-bg); color: var(--orange); }
+.btn-red           { background: var(--red-bg);    color: var(--red);    }
+.btn-blue          { background: var(--blue-bg);   color: var(--blue);   }
+.btn-purple        { background: var(--purple-bg); color: var(--purple); }
+.btn-solid         { background: var(--green); color: #fff; padding: 10px 22px; font-size: .9rem; }
+.btn-solid:hover   { filter: brightness(1.08); }
+
+/* Small icon-only buttons (eye, edit, trash) */
+.icon-btn {
+  width: 31px; height: 31px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-size: .82rem;
+  transition: filter .15s;
+  flex-shrink: 0;
+}
+.icon-btn:hover { filter: brightness(.9); }
+
+/* Inline status dropdown inside table */
+.status-sel {
+  padding: 5px 8px;
+  border: 1.5px solid var(--border);
+  border-radius: 7px;
+  font-size: .78rem;
+  outline: none;
+  cursor: pointer;
+  background: var(--card);
+}
+.status-sel:focus { border-color: var(--green-mid); }
+
+/* ═══════════════════════════════════════════════════
+   FORM CARD  (used in Products panel + Debt panel)
+═══════════════════════════════════════════════════ */
+.form-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 24px;
+  margin-bottom: 24px;
+}
+.form-card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.form-full { grid-column: 1 / -1; }          /* spans both columns */
+
+.form-group { display: flex; flex-direction: column; gap: 5px; }
+.form-group label {
+  font-size: .74rem;
+  font-weight: 700;
+  color: var(--sub);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.form-group input,
+.form-group textarea,
+.form-group select {
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 9px;
+  font-size: .92rem;
+  outline: none;
+  font-family: inherit;
+  transition: border-color .2s;
+  background: var(--card);
+  color: var(--text);
+}
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus { border-color: var(--green-mid); }
+.form-group textarea { resize: vertical; min-height: 60px; }
+
+/* Field error highlight */
+.form-group input.error  { border-color: var(--red); }
+.field-err { font-size: .73rem; color: var(--red); margin-top: 2px; }
+
+.form-actions { display: flex; gap: 10px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
+
+/* ═══════════════════════════════════════════════════
+   DEBT CARDS  (grid layout on Debts panel)
+═══════════════════════════════════════════════════ */
+.debt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.debt-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+  border-left: 4px solid var(--orange);
+  position: relative;
+  transition: box-shadow .2s;
+}
+.debt-card:hover    { box-shadow: 0 4px 24px rgba(0,0,0,.1); }
+.debt-card.is-paid  { border-left-color: var(--green-mid); opacity: .82; }
+.debt-card.editing  { border-left-color: var(--purple); outline: 2px solid var(--purple-bg); }
+
+/* Card header row */
+.dc-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+.dc-name  { font-weight: 700; font-size: .97rem; }
+.dc-meta  { font-size: .73rem; color: var(--sub); margin-top: 2px; line-height: 1.4; }
+
+/* Right: amount */
+.dc-right          { text-align: right; flex-shrink: 0; margin-left: 12px; }
+.dc-amount         { font-size: 1.4rem; font-weight: 900; color: var(--orange); line-height: 1; }
+.dc-amount.cleared { color: var(--green-mid); }
+.dc-of             { font-size: .7rem; color: var(--sub); margin-top: 2px; }
+
+/* Note box */
+.dc-note {
+  font-size: .8rem;
+  color: var(--sub);
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 7px 11px;
+  margin: 10px 0;
+  line-height: 1.45;
+}
+
+/* Progress bar (partial payments) */
+.prog-labels { display: flex; justify-content: space-between; font-size: .71rem; color: var(--sub); margin-bottom: 4px; }
+.prog-bar    { height: 6px; background: #f0f0f0; border-radius: 10px; overflow: hidden; margin-bottom: 10px; }
+.prog-fill   { height: 100%; background: linear-gradient(90deg, var(--green-mid), #a5d6a7); border-radius: 10px; transition: width .5s ease; }
+
+/* Payment history list */
+.pay-hist           { padding-top: 10px; border-top: 1px solid #f0f0f0; margin-bottom: 10px; }
+.pay-hist-title     { font-size: .68rem; font-weight: 700; color: var(--sub); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+.pay-hist-row       { display: flex; justify-content: space-between; font-size: .8rem; padding: 3px 0; color: #555; }
+.pay-hist-row .credit { color: var(--green-mid); font-weight: 700; }
+
+/* Record payment input row */
+.pay-input-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+.pay-input-row input {
+  flex: 1; min-width: 110px;
+  padding: 8px 11px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: .85rem;
+  outline: none;
+}
+.pay-input-row input:focus { border-color: var(--green-mid); }
+
+/* Card action buttons row */
+.dc-actions { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 8px; }
+
+/* Inline edit form inside a debt card */
+.debt-edit-form {
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 14px;
+  margin-top: 12px;
+  border: 1px solid var(--border);
+}
+.debt-edit-form .form-grid { gap: 10px; }
+.debt-edit-form input,
+.debt-edit-form textarea,
+.debt-edit-form select {
+  padding: 8px 10px;
+  font-size: .85rem;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+  font-family: inherit;
+  background: #fff;
+  width: 100%;
+}
+.debt-edit-form input:focus,
+.debt-edit-form textarea:focus { border-color: var(--green-mid); }
+.debt-edit-form textarea { min-height: 50px; resize: vertical; }
+.debt-edit-actions { display: flex; gap: 8px; margin-top: 10px; }
+
+/* ═══════════════════════════════════════════════════
+   ORDER DETAIL SIDE DRAWER
+═══════════════════════════════════════════════════ */
+.overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.44); z-index: 500; }
+.overlay.open { display: flex; justify-content: flex-end; }
+
+.drawer {
+  width: 440px;
+  max-width: 96vw;
+  height: 100%;
+  background: var(--card);
+  overflow-y: auto;
+  padding: 26px;
+  animation: slideIn .24s ease;
+}
+@keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+.drawer-close {
+  float: right;
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  color: var(--sub);
+  padding: 4px;
+  line-height: 1;
+}
+.drawer-close:hover { color: var(--red); }
+.drawer-title { font-size: 1.1rem; font-weight: 800; margin-bottom: 18px; clear: both; }
+
+.dr-section    { margin-bottom: 18px; }
+.dr-section h4 {
+  font-size: .7rem;
+  font-weight: 700;
+  color: var(--sub);
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  margin-bottom: 9px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.dr-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 7px 0; border-bottom: 1px solid #f8f8f8; font-size: .87rem; }
+.dr-row:last-child { border-bottom: none; }
+.dr-row .k { color: var(--sub); font-weight: 600; flex-shrink: 0; margin-right: 12px; }
+.dr-row .v { text-align: right; color: var(--text); max-width: 60%; word-break: break-word; }
+.dr-item   { display: flex; justify-content: space-between; font-size: .85rem; padding: 6px 0; border-bottom: 1px solid #f8f8f8; }
+.dr-item:last-child { border-bottom: none; }
+
+/* Status update row inside drawer */
+.drawer-status-row { display: flex; gap: 8px; margin-top: 14px; }
+.drawer-status-row select { flex: 1; padding: 9px 10px; border: 1.5px solid var(--border); border-radius: 9px; font-size: .87rem; outline: none; }
+
+/* ═══════════════════════════════════════════════════
+   PRODUCT EDIT MODAL
+═══════════════════════════════════════════════════ */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.44);
+  z-index: 600;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal-overlay.open { display: flex; }
+
+.modal {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 28px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,.22);
+  animation: popIn .22s ease;
+}
+@keyframes popIn { from { transform: scale(.94); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+.modal-title { font-size: 1.05rem; font-weight: 800; margin-bottom: 18px; }
+.modal-close { float: right; background: none; border: none; font-size: 1.25rem; cursor: pointer; color: var(--sub); }
+.modal-close:hover { color: var(--red); }
+
+/* ═══════════════════════════════════════════════════
+   TOAST NOTIFICATIONS
+═══════════════════════════════════════════════════ */
+.toast-container {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  padding: 11px 16px;
+  border-radius: 11px;
+  font-size: .87rem;
+  font-weight: 600;
+  box-shadow: 0 4px 20px rgba(0,0,0,.15);
+  opacity: 0;
+  transform: translateX(20px);
+  transition: all .3s ease;
+  max-width: 320px;
+  pointer-events: all;
+}
+.toast.visible        { opacity: 1; transform: translateX(0); }
+.toast.success { background: #e8f5e9; color: #1b5e20; border-left: 4px solid #43a047; }
+.toast.error   { background: #ffebee; color: #c62828; border-left: 4px solid #ef5350; }
+.toast.info    { background: #e3f2fd; color: #1565c0; border-left: 4px solid #42a5f5; }
+.toast.warning { background: #fff8e1; color: #e65100; border-left: 4px solid #ffc107; }
+
+/* ═══════════════════════════════════════════════════
+   LOADING SPINNER + EMPTY STATE
+═══════════════════════════════════════════════════ */
+.spinner {
+  width: 36px; height: 36px;
+  border: 3px solid #e2e8f0;
+  border-top-color: var(--green-mid);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  margin: 48px auto;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading-text { text-align: center; color: var(--sub); font-size: .87rem; margin-top: 8px; padding-bottom: 32px; }
+
+.empty-state { text-align: center; padding: 48px 20px; color: var(--sub); }
+.empty-state i { font-size: 2.8rem; display: block; margin-bottom: 12px; opacity: .28; }
+.empty-state p { font-size: .9rem; }
+
+/* ═══════════════════════════════════════════════════
+   HAMBURGER (mobile only)
+═══════════════════════════════════════════════════ */
+.hamburger {
+  display: none;
+  position: fixed;
+  top: 13px; left: 13px;
+  z-index: 300;
+  background: var(--green);
+  color: #fff;
+  border: none;
+  border-radius: 9px;
+  width: 42px; height: 42px;
+  font-size: 1.1rem;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 10px rgba(0,0,0,.24);
+}
+
+/* ═══════════════════════════════════════════════════
+   RESPONSIVE: mobile & tablet breakpoint
+═══════════════════════════════════════════════════ */
+@media (max-width: 880px) {
+  /* Hide sidebar off-screen; hamburger reveals it */
+  .sidebar               { transform: translateX(-100%); }
+  .sidebar.open          { transform: translateX(0); }
+  .main                  { margin-left: 0; padding: 14px; padding-top: 64px; }
+  .hamburger             { display: flex; }
+
+  /* Stack stat cards 2-per-row */
+  .stats-grid            { grid-template-columns: repeat(2, 1fr); }
+  .stat-card.revenue     { grid-column: span 2; }
+
+  /* Stack forms to single column */
+  .form-grid             { grid-template-columns: 1fr; }
+  .debt-grid             { grid-template-columns: 1fr; }
+  .search-bar input      { width: 130px; }
+}
+
+/* ─── Utility helpers ──────────────────────────── */
+.fw700  { font-weight: 700; }
+.fwb    { font-weight: 800; }
+.fsub   { color: var(--sub); }
+.fsm    { font-size: .8rem; }
+.mt8    { margin-top: 8px; }
+.mt12   { margin-top: 12px; }
+.gap8   { gap: 8px; }
+.flex   { display: flex; align-items: center; }
+.rupee  { color: var(--green); }
+
+.m-back{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: white;
+  font-size: .85rem;
+  margin-bottom: 8px;
+  text-decoration: none;
+}
+</style>
+</head>
+
+<body>
+<!-- ════════════════════════════════════════════════
+     TOAST CONTAINER  — JS injects toasts here
+════════════════════════════════════════════════ -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ════════════════════════════════════════════════
+     MOBILE HAMBURGER BUTTON
+════════════════════════════════════════════════ -->
+<button class="hamburger" id="hamburgerBtn" aria-label="Open menu">
+  <i class="fas fa-bars"></i>
+</button>
+
+<!-- ════════════════════════════════════════════════
+     SIDEBAR
+════════════════════════════════════════════════ -->
+<aside class="sidebar" id="sidebar">
+
+  <!-- Brand -->
+  <div class="sb-logo">
+    <a class="m-back" href="/pages/profile.html"><span><i class="fa-solid fa-arrow-left"></i> Back</span></a>
+    <div class="sb-logo-title"><span>🛒</span> Appa Kadai</div>
+    <div class="sb-logo-sub">Owner Dashboard</div>
+  </div>
+
+  <!-- Main nav group -->
+  <div class="sb-group">Main</div>
+  <div class="nav-item active" data-panel="overview" onclick="switchPanel('overview')">
+    <i class="fas fa-chart-pie"></i> Overview
+  </div>
+  <div class="nav-item" data-panel="orders" onclick="switchPanel('orders')">
+    <i class="fas fa-receipt"></i> Orders
+    <span class="nav-badge" id="badge-orders">0</span>
+  </div>
+  <div class="nav-item" data-panel="products" onclick="switchPanel('products')">
+    <i class="fas fa-box-open"></i> Products
+  </div>
+
+  <!-- Finance nav group -->
+  <div class="sb-group">Finance</div>
+  <div class="nav-item" data-panel="debts" onclick="switchPanel('debts')">
+    <i class="fas fa-hand-holding-usd"></i> Debts
+    <span class="nav-badge" id="badge-debts">0</span>
+  </div>
+  <div class="nav-item" data-panel="customers" onclick="switchPanel('customers')">
+    <i class="fas fa-users"></i> Customers
+  </div>
+
+  <!-- Footer: user + logout -->
+  <div class="sb-footer">
+    <div class="sb-logout" onclick="handleLogout()">
+      <i class="fas fa-sign-out-alt"></i> Logout
+    </div>
+    <div class="sb-user" id="sbUserEmail">Signing in…</div>
+  </div>
+</aside>
+
+<!-- ════════════════════════════════════════════════
+     MAIN CONTENT
+════════════════════════════════════════════════ -->
+<main class="main">
+
+  <!-- ══════════════════════════════════════════════
+       PANEL: OVERVIEW
+  ══════════════════════════════════════════════ -->
+  <div class="panel active" id="panel-overview">
+    <div class="page-hd">
+      <button class="refresh-btn" id="refreshBtn">
+        <i class="fas fa-sync-alt"></i> Refresh
+      </button>
+      <h1><span>📊</span> Overview</h1>
+      <p id="todayLabel">Loading date…</p>
+    </div>
+
+    <!-- KPI stat cards -->
+    <div class="stats-grid">
+
+      <!-- Revenue highlight card (spans 2 cols) -->
+      <div class="stat-card revenue">
+        <div class="stat-icon"><i class="fas fa-rupee-sign"></i></div>
+        <div class="stat-val" id="kpi-revenue">—</div>
+        <div class="stat-lbl">Total Revenue</div>
+        <div class="stat-sub" id="kpi-revenue-sub">from 0 delivered orders</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon" style="background:var(--blue-bg);color:var(--blue)"><i class="fas fa-receipt"></i></div>
+        <div class="stat-val" id="kpi-orders">—</div>
+        <div class="stat-lbl">Total Orders</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon" style="background:var(--orange-bg);color:var(--orange)"><i class="fas fa-clock"></i></div>
+        <div class="stat-val" id="kpi-pending">—</div>
+        <div class="stat-lbl">Pending Orders</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon" style="background:var(--green-bg);color:var(--green-mid)"><i class="fas fa-check-circle"></i></div>
+        <div class="stat-val" id="kpi-delivered">—</div>
+        <div class="stat-lbl">Delivered</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon" style="background:var(--red-bg);color:var(--red)"><i class="fas fa-exclamation-circle"></i></div>
+        <div class="stat-val" id="kpi-debt">—</div>
+        <div class="stat-lbl">Debt Pending (₹)</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="fas fa-users"></i></div>
+        <div class="stat-val" id="kpi-customers">—</div>
+        <div class="stat-lbl">Total Customers</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon" style="background:var(--teal-bg);color:var(--teal)"><i class="fas fa-box"></i></div>
+        <div class="stat-val" id="kpi-products">—</div>
+        <div class="stat-lbl">Total Products</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon" style="background:var(--orange-bg);color:var(--orange)"><i class="fas fa-exclamation-triangle"></i></div>
+        <div class="stat-val" id="kpi-lowstock">—</div>
+        <div class="stat-lbl">Low / Out of Stock</div>
+      </div>
+
+    </div><!-- /stats-grid -->
+
+    <!-- Recent orders snapshot -->
+    <div class="sec-hd">
+      <h2>🕐 Recent Orders</h2>
+      <button class="btn btn-blue" onclick="switchPanel('orders')">View All →</button>
+    </div>
+    <div class="tbl-wrap" id="ov-recentOrders">
+      <div class="spinner"></div>
+    </div>
+
+    <!-- Pending debts snapshot -->
+    <div class="sec-hd">
+      <h2>⚠️ Pending Debts</h2>
+      <button class="btn btn-orange" onclick="switchPanel('debts')">Manage All →</button>
+    </div>
+    <div class="tbl-wrap" id="ov-pendingDebts">
+      <div class="spinner"></div>
+    </div>
+
+  </div><!-- /panel-overview -->
+
+
+  <!-- ══════════════════════════════════════════════
+       PANEL: ORDERS
+  ══════════════════════════════════════════════ -->
+  <div class="panel" id="panel-orders">
+    <div class="page-hd">
+      <h1><span>📦</span> All Orders</h1>
+      <p>View every order, update delivery status, inspect order details</p>
+    </div>
+
+    <!-- Search + filters -->
+    <div class="sec-hd">
+      <div class="search-bar">
+        <i class="fas fa-search"></i>
+        <input type="text" id="orderSearch"
+               placeholder="Search name / email / order ID…"
+               oninput="renderOrdersPanel()" />
+      </div>
+      <div class="sec-hd-r">
+        <select class="sel" id="orderStatusFilter" onchange="renderOrdersPanel()">
+          <option value="all">All Statuses</option>
+          <option value="placed">Placed</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="delivered">Delivered</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <select class="sel" id="orderPayFilter" onchange="renderOrdersPanel()">
+          <option value="all">All Payments</option>
+          <option value="upi">UPI</option>
+          <option value="cod">COD</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="tbl-wrap" id="ordersTable">
+      <div class="spinner"></div>
+    </div>
+  </div><!-- /panel-orders -->
+
+
+  <!-- ══════════════════════════════════════════════
+       PANEL: PRODUCTS
+  ══════════════════════════════════════════════ -->
+  <div class="panel" id="panel-products">
+    <div class="page-hd">
+      <h1><span>🛍️</span> Products</h1>
+      <p>Manage inventory — add, edit, update prices and stock</p>
+    </div>
+
+    <!-- Add / Edit product form -->
+    <div class="form-card" id="productFormCard">
+      <div class="form-card-title">
+        <i class="fas fa-plus-circle" style="color:var(--green-mid)"></i>
+        <span id="productFormTitle">Add New Product</span>
+      </div>
+
+      <!-- Hidden field: tracks which doc we're editing (empty = new) -->
+      <input type="hidden" id="editProductId" value="" />
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Product Name *</label>
+          <input type="text" id="pName" placeholder="e.g. Basmati Rice" />
+        </div>
+        <div class="form-group">
+          <label>Category *</label>
+          <select id="pCategory">
+            <option value="">— Select —</option>
+            <option value="vegetables">Vegetables</option>
+            <option value="fruits">Fruits</option>
+            <option value="grains">Grains</option>
+            <option value="dairy">Dairy</option>
+            <option value="spices">Spices</option>
+            <option value="snacks">Snacks</option>
+            <option value="oil">Oil</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Price (₹) *</label>
+          <input type="number" id="pPrice" placeholder="0.00" min="0" step="0.01" />
+        </div>
+        <div class="form-group">
+          <label>Unit</label>
+          <input type="text" id="pUnit" placeholder="e.g. 1 kg, 500 g, 1 L" />
+        </div>
+        <div class="form-group">
+          <label>Stock Quantity *</label>
+          <input type="number" id="pStock" placeholder="0" min="0" />
+        </div>
+        <div class="form-group">
+          <label>Image URL</label>
+          <input type="url" id="pImageUrl" placeholder="https://…" />
+        </div>
+        <div class="form-group form-full">
+          <label>Description</label>
+          <textarea id="pDesc" placeholder="Short product description (optional)"></textarea>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn btn-solid" id="saveProductBtn" onclick="saveProduct()">
+          <i class="fas fa-save"></i> <span id="saveProductBtnText">Save Product</span>
+        </button>
+        <button class="btn btn-orange" id="cancelEditBtn" onclick="cancelProductEdit()" style="display:none">
+          Cancel
+        </button>
+      </div>
+    </div><!-- /productFormCard -->
+
+    <!-- Product list + filters -->
+    <div class="sec-hd">
+      <h2>📦 Product List</h2>
+      <div class="sec-hd-r">
+        <div class="search-bar">
+          <i class="fas fa-search"></i>
+          <input type="text" id="prodSearch" placeholder="Search products…" oninput="renderProductsPanel()" />
+        </div>
+        <select class="sel" id="prodCatFilter" onchange="renderProductsPanel()">
+          <option value="all">All Categories</option>
+          <option value="vegetables">Vegetables</option>
+          <option value="fruits">Fruits</option>
+          <option value="grains">Grains</option>
+          <option value="dairy">Dairy</option>
+          <option value="spices">Spices</option>
+          <option value="snacks">Snacks</option>
+          <option value="oil">Oil</option>
+          <option value="other">Other</option>
+        </select>
+        <select class="sel" id="prodStockFilter" onchange="renderProductsPanel()">
+          <option value="all">All Stock</option>
+          <option value="in">In Stock</option>
+          <option value="low">Low (≤5)</option>
+          <option value="out">Out of Stock</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="tbl-wrap" id="productsTable">
+      <div class="spinner"></div>
+    </div>
+  </div><!-- /panel-products -->
+
+
+  <!-- ══════════════════════════════════════════════
+       PANEL: DEBTS
+  ══════════════════════════════════════════════ -->
+  <div class="panel" id="panel-debts">
+    <div class="page-hd">
+      <h1><span>💰</span> Debt Management</h1>
+      <p>Track credit purchases — add, edit, record payments, mark as paid</p>
+    </div>
+
+    <!-- ── Add / Edit Debt Form ── -->
+    <div class="form-card">
+      <div class="form-card-title">
+        <i class="fas fa-plus-circle" style="color:var(--orange)"></i>
+        <span id="debtFormTitle">Add New Debt Entry</span>
+      </div>
+
+      <!-- Hidden: doc ID when editing -->
+      <input type="hidden" id="editDebtId" value="" />
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Customer Name *</label>
+          <input type="text" id="dName" placeholder="Full name" />
+        </div>
+        <div class="form-group">
+          <label>Phone Number *</label>
+          <input type="tel" id="dPhone" placeholder="9876543210" maxlength="10" />
+        </div>
+        <div class="form-group">
+          <label>Customer Email</label>
+          <input type="email" id="dEmail" placeholder="customer@email.com" />
+        </div>
+        <div class="form-group">
+          <label>Amount (₹) *</label>
+          <input type="number" id="dAmount" placeholder="500" min="1" step="0.01" />
+        </div>
+        <div class="form-group">
+          <label>Date *</label>
+          <input type="date" id="dDate" />
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select id="dStatus">
+            <option value="pending">Pending</option>
+            <option value="partial">Partial</option>
+            <option value="paid">Paid</option>
+          </select>
+        </div>
+        <div class="form-group form-full">
+          <label>Reason / Notes</label>
+          <textarea id="dNote"
+            placeholder="e.g. Credit purchase — 5 kg rice + 2 L oil on 20 May 2026"></textarea>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn btn-solid" id="saveDebtBtn" onclick="saveDebt()">
+          <i class="fas fa-save"></i>
+          <span id="saveDebtBtnText">Add Debt</span>
+        </button>
+        <button class="btn btn-orange" id="cancelDebtBtn" onclick="cancelDebtEdit()" style="display:none">
+          Cancel Edit
+        </button>
+        <span id="debtFormMsg" style="font-size:.82rem;color:var(--sub)"></span>
+      </div>
+    </div><!-- /debt form card -->
+
+    <!-- ── Debt List ── -->
+    <div class="sec-hd">
+      <h2>📋 All Debts</h2>
+      <div class="sec-hd-r">
+        <div class="search-bar">
+          <i class="fas fa-search"></i>
+          <input type="text" id="debtSearch" placeholder="Name / phone…" oninput="renderDebtsPanel()" />
+        </div>
+        <select class="sel" id="debtStatusFilter" onchange="renderDebtsPanel()">
+          <option value="all">All Statuses</option>
+          <option value="pending">Pending</option>
+          <option value="partial">Partial</option>
+          <option value="paid">Paid</option>
+        </select>
+        <select class="sel" id="debtSortFilter" onchange="renderDebtsPanel()">
+          <option value="date-desc">Newest First</option>
+          <option value="date-asc">Oldest First</option>
+          <option value="amount-desc">Highest Amount</option>
+          <option value="amount-asc">Lowest Amount</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="debtCardsContainer">
+      <div class="spinner"></div>
+    </div>
+
+  </div><!-- /panel-debts -->
+
+
+  <!-- ══════════════════════════════════════════════
+       PANEL: CUSTOMERS
+  ══════════════════════════════════════════════ -->
+  <div class="panel" id="panel-customers">
+    <div class="page-hd">
+      <h1><span>👥</span> Customers</h1>
+      <p>All customers derived from orders — spending history and debt status</p>
+    </div>
+    <div class="sec-hd">
+      <div class="search-bar">
+        <i class="fas fa-search"></i>
+        <input type="text" id="custSearch" placeholder="Search name / email…" oninput="renderCustomersPanel()" />
+      </div>
+    </div>
+    <div class="tbl-wrap" id="customersTable">
+      <div class="spinner"></div>
+    </div>
+  </div><!-- /panel-customers -->
+
+</main><!-- /main -->
+
+
+<!-- ════════════════════════════════════════════════
+     ORDER DETAIL SIDE DRAWER
+════════════════════════════════════════════════ -->
+<div class="overlay" id="drawerOverlay" onclick="handleOverlayClick(event)">
+  <div class="drawer" id="drawer">
+    <button class="drawer-close" onclick="closeDrawer()">
+      <i class="fas fa-times"></i>
+    </button>
+    <div class="drawer-title" id="drawerTitle">Order Detail</div>
+    <div id="drawerContent"></div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════════
+     PRODUCT EDIT/ADD MODAL  (inline form already in panel,
+     this modal is used only for quick stock-price edit)
+════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="quickEditModal" onclick="handleModalClick(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="closeQuickEdit()"><i class="fas fa-times"></i></button>
+    <div class="modal-title" id="qeModalTitle">Quick Edit</div>
+    <input type="hidden" id="qeProductId" />
+    <div class="form-grid" style="gap:12px">
+      <div class="form-group">
+        <label>Price (₹)</label>
+        <input type="number" id="qePrice" min="0" step="0.01" />
+      </div>
+      <div class="form-group">
+        <label>Stock Qty</label>
+        <input type="number" id="qeStock" min="0" />
+      </div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:10px">
+      <button class="btn btn-solid" onclick="saveQuickEdit()">
+        <i class="fas fa-save"></i> Save Changes
+      </button>
+      <button class="btn btn-orange" onclick="closeQuickEdit()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════════
+     SCRIPTS
+     Order matters: firebase-config.js must come AFTER
+     the Firebase SDK scripts (already in <head>).
+     app.js contains ALL the dashboard logic.
+════════════════════════════════════════════════ -->
+<script src="../js/firebase-config.js"></script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   APPA KADAI — ADMIN DASHBOARD
+   ─────────────────────────────────────────────────────────────────
+   Architecture:
+     • Firestore real-time listeners push data into module-level arrays
+     • Every listener triggers a full re-render of relevant UI sections
+     • CRUD functions write to Firestore; the listener auto-updates UI
+     • No page refresh ever needed
+
+   Firestore collections used:
+     /orders       — customer orders (created by the customer app)
+     /products     — store inventory (managed here)
+     /debts        — credit/debt entries (managed here)
+     /user_debts   — per-email debt summary (mirrors debts for customer view)
+     /carts        — (read-only here; managed by customer app)
+═══════════════════════════════════════════════════════════════════ */
+
+// ─────────────────────────────────────────────────────────────────
+// CONFIGURATION
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * ADMIN_EMAILS: restrict dashboard access.
+ * Leave empty [] to allow ANY signed-in user (good for development).
+ * In production add your email: ["owner@gmail.com"]
+ */
+const ADMIN_EMAILS = [];
+
+// ─────────────────────────────────────────────────────────────────
+// MODULE STATE  — in-memory cache of Firestore data
+// ─────────────────────────────────────────────────────────────────
+let state = {
+  orders   : [],   // all orders, newest first
+  products : [],   // all products, alphabetical
+  debts    : [],   // all debts, newest first
+  panel    : 'overview',    // currently visible panel
+  drawerOrderId : null,     // order ID shown in side drawer
+};
+
+// Firestore unsubscribe functions (call these to stop listeners)
+let unsubs = {};
+
+
+// ═════════════════════════════════════════════════════════════════
+// TOAST NOTIFICATIONS
+// ═════════════════════════════════════════════════════════════════
+
+/**
+ * Show a toast message.
+ * @param {string} message
+ * @param {'success'|'error'|'info'|'warning'} type
+ * @param {number} duration  milliseconds before auto-hide
+ */
+function showToast(message, type = 'success', duration = 4000) {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  // Trigger CSS transition
+  requestAnimationFrame(() => toast.classList.add('visible'));
+
+  // Auto-remove
+  setTimeout(() => {
+    toast.classList.remove('visible');
+    setTimeout(() => toast.remove(), 350);
+  }, duration);
+}
+
+
+// ═════════════════════════════════════════════════════════════════
+// AUTH GATE — only run dashboard for signed-in admin
+// ═════════════════════════════════════════════════════════════════
+
+auth.onAuthStateChanged(user => {
+  if (!user) {
+    // Not signed in → redirect to login
+    window.location.href = 'login.html';
+    return;
+  }
+
+  // Check admin allow-list (if configured)
+  if (ADMIN_EMAILS.length > 0 && !ADMIN_EMAILS.includes(user.email)) {
+    alert('Access denied — admin only.');
+    window.location.href = '../index.html';
+    return;
+  }
+
+  // Signed in and authorised
+  document.getElementById('sbUserEmail').textContent = user.email;
+  document.getElementById('todayLabel').textContent =
+    new Date().toLocaleDateString('en-IN', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+
+  // Set today's date as default for new debt entries
+  document.getElementById('dDate').value = new Date().toISOString().slice(0, 10);
+
+  // Start all Firestore real-time listeners
+  startListeners();
+});
+
+
+// ═════════════════════════════════════════════════════════════════
+// FIRESTORE REAL-TIME LISTENERS
+// ═════════════════════════════════════════════════════════════════
+
+/**
+ * Attach onSnapshot listeners to all three collections.
+ * Each listener:
+ *   1. Replaces the in-memory cache (state.orders / products / debts)
+ *   2. Calls renderAll() to refresh every visible widget
+ *
+ * onSnapshot fires immediately with current data, then again on any change.
+ * This means the dashboard is always up-to-date without polling.
+ */
+function startListeners() {
+
+  // ── Orders: newest first ──────────────────────────────────────
+  unsubs.orders = db.collection('orders')
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(snapshot => {
+      // Map each Firestore document to a plain JS object
+      state.orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderAll();
+    }, err => {
+      console.error('Orders listener error:', err);
+      showToast('Failed to load orders — check Firestore rules', 'error');
+    });
+
+  // ── Products: alphabetical by name ───────────────────────────
+  unsubs.products = db.collection('products')
+    .orderBy('name')
+    .onSnapshot(snapshot => {
+      state.products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderAll();
+    }, err => {
+      console.error('Products listener error:', err);
+      showToast('Failed to load products', 'error');
+    });
+
+  // ── Debts: newest first ───────────────────────────────────────
+  unsubs.debts = db.collection('debts')
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(snapshot => {
+      state.debts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderAll();
+    }, err => {
+      console.error('Debts listener error:', err);
+      showToast('Failed to load debts', 'error');
+    });
+}
+
+/**
+ * Called whenever any listener fires.
+ * Updates sidebar badges, overview KPIs, and the active panel.
+ */
+function renderAll() {
+  updateSidebarBadges();
+  renderOverviewPanel();
+
+  // Only render the current panel (avoid unnecessary DOM work)
+  if (state.panel === 'orders')    renderOrdersPanel();
+  if (state.panel === 'products')  renderProductsPanel();
+  if (state.panel === 'debts')     renderDebtsPanel();
+  if (state.panel === 'customers') renderCustomersPanel();
+}
+
+
+// ═════════════════════════════════════════════════════════════════
+// SIDEBAR BADGES (live pending counts)
+// ═════════════════════════════════════════════════════════════════
+
+function updateSidebarBadges() {
+  // Count orders that are still actionable
+  const pendingOrders = state.orders.filter(o =>
+    ['placed', 'confirmed'].includes(o.status)
+  ).length;
+
+  // Count debts that haven't been fully settled
+  const unpaidDebts = state.debts.filter(d => d.status !== 'paid').length;
+
+  // Update badge elements (show/hide based on count)
+  setBadge('badge-orders', pendingOrders);
+  setBadge('badge-debts',  unpaidDebts);
+}
+
+function setBadge(id, count) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = count;
+  el.style.display = count > 0 ? 'flex' : 'none';
+}
+
+
+// ═════════════════════════════════════════════════════════════════
+// PANEL NAVIGATION
+// ═════════════════════════════════════════════════════════════════
+
+/**
+ * Show the named panel, hide all others, update nav highlight.
+ * @param {string} name  one of: overview | orders | products | debts | customers
+ */
+function switchPanel(name) {
+  state.panel = name;
+
+  // Toggle panel visibility
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(`panel-${name}`).classList.add('active');
+
+  // Toggle nav highlight
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelector(`.nav-item[data-panel="${name}"]`)?.classList.add('active');
+
+  // Render the panel (may already be rendered from renderAll; safe to call again)
+  if (name === 'orders')    renderOrdersPanel();
+  if (name === 'products')  renderProductsPanel();
+  if (name === 'debts')     renderDebtsPanel();
+  if (name === 'customers') renderCustomersPanel();
+
+  // Close sidebar on mobile
+  if (window.innerWidth < 880) {
+    document.getElementById('sidebar').classList.remove('open');
+  }
+}
+
+// Hamburger toggle (mobile)
+document.getElementById('hamburgerBtn').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.toggle('open');
+});
+
+// Refresh button
+document.getElementById('refreshBtn').addEventListener('click', () => {
+  showToast('Data is already live — no refresh needed 😊', 'info', 2500);
+});
+
+
+// ═════════════════════════════════════════════════════════════════
+// OVERVIEW PANEL
+// ═════════════════════════════════════════════════════════════════
+
+function renderOverviewPanel() {
+  const { orders, products, debts } = state;
+
+  // ── Compute KPIs ───────────────────────────────────────────────
+  const delivered   = orders.filter(o => o.status === 'delivered');
+  const pending     = orders.filter(o => ['placed', 'confirmed'].includes(o.status));
+  const revenue     = delivered.reduce((sum, o) => sum + (o.total || 0), 0);
+  const unpaidDebts = debts.filter(d => d.status !== 'paid');
+  const debtTotal   = unpaidDebts.reduce((sum, d) => sum + (d.remaining ?? d.amount ?? 0), 0);
+  const uniqueCusts = new Set(orders.map(o => o.userEmail).filter(Boolean)).size;
+  const lowStock    = products.filter(p => (p.stock ?? 0) <= 5).length;
+
+  // ── Update KPI card values ─────────────────────────────────────
+  setText('kpi-revenue',     '₹' + fmt(revenue));
+  setText('kpi-revenue-sub', `from ${delivered.length} delivered order${delivered.length !== 1 ? 's' : ''}`);
+  setText('kpi-orders',      orders.length);
+  setText('kpi-pending',     pending.length);
+  setText('kpi-delivered',   delivered.length);
+  setText('kpi-debt',        '₹' + fmt(debtTotal));
+  setText('kpi-customers',   uniqueCusts);
+  setText('kpi-products',    products.length);
+  setText('kpi-lowstock',    lowStock);
+
+  // ── Recent orders (last 8) ─────────────────────────────────────
+  const recentEl = document.getElementById('ov-recentOrders');
+  if (orders.length === 0) {
+    recentEl.innerHTML = emptyState('fa-receipt', 'No orders yet');
+  } else {
+    recentEl.innerHTML = buildOrderTable(orders.slice(0, 8), { mini: true });
+  }
+
+  // ── Pending debts snapshot (first 6 unpaid) ────────────────────
+  const debtEl = document.getElementById('ov-pendingDebts');
+  if (unpaidDebts.length === 0) {
+    debtEl.innerHTML = emptyState('fa-smile', 'No pending debts — all clear! 🎉');
+  } else {
+    debtEl.innerHTML = buildDebtSnapshotTable(unpaidDebts.slice(0, 6));
+  }
+}
+
+
+// ═════════════════════════════════════════════════════════════════
+// ORDERS PANEL
+// ═════════════════════════════════════════════════════════════════
+
+function renderOrdersPanel() {
+  const q       = getVal('orderSearch').toLowerCase();
+  const statusF = getVal('orderStatusFilter');
+  const payF    = getVal('orderPayFilter');
+
+  let list = state.orders;
+
+  // Apply filters
+  if (statusF !== 'all') list = list.filter(o => o.status === statusF);
+  if (payF !== 'all')    list = list.filter(o => (o.paymentMethod || '') === payF);
+  if (q) {
+    list = list.filter(o =>
+      (o.userEmail     || '').toLowerCase().includes(q) ||
+      (o.address?.name || '').toLowerCase().includes(q) ||
+      o.id.toLowerCase().includes(q)
+    );
+  }
+
+  const el = document.getElementById('ordersTable');
+  el.innerHTML = list.length
+    ? buildOrderTable(list, { mini: false })
+    : emptyState('fa-inbox', 'No orders match your filters');
+}
+
+/**
+ * Build an HTML table of orders.
+ * @param {Array}   orders
+ * @param {Object}  opts   { mini: boolean }  mini = no status dropdown
+ */
+function buildOrderTable(orders, opts = {}) {
+  const { mini = false } = opts;
+
+  const rows = orders.map(o => {
+    const sid    = o.id.slice(-7).toUpperCase();
+    const status = o.status || 'placed';
+    const date   = formatDate(o.createdAt);
+    const name   = o.address?.name || '—';
+    const total  = (o.total || 0).toLocaleString('en-IN');
+
+    const statusDropdown = `
+      <select class="status-sel"
+              onchange="updateOrderStatus('${o.id}', this.value)"
+              title="Change status">
+        ${['placed','confirmed','delivered','cancelled'].map(s =>
+          `<option value="${s}" ${status === s ? 'selected' : ''}>${capitalize(s)}</option>`
+        ).join('')}
+      </select>`;
+
+    return `
+      <tr>
+        <td>
+          <code style="font-size:.75rem;background:#f1f5f9;padding:2px 7px;border-radius:5px">
+            #${sid}
+          </code>
+        </td>
+        <td>
+          <div class="fw700">${name}</div>
+          <div class="fsm fsub">${o.userEmail || '—'}</div>
+          <div class="fsm fsub">${o.address?.phone || ''}</div>
+        </td>
+        <td><span class="badge b-${status}">${status}</span></td>
+        <td class="fw700">₹${total}</td>
+        <td class="fsm fw700 fsub" style="text-transform:uppercase">
+          ${o.paymentMethod || '—'}
+        </td>
+        <td class="fsm fsub">${date}</td>
+        ${!mini ? `<td>${statusDropdown}</td>` : ''}
+        <td>
+          <button class="icon-btn btn-blue"
+                  onclick="openOrderDrawer('${o.id}')"
+                  title="View order detail">
+            <i class="fas fa-eye"></i>
+          </button>
+        </td>
+      </tr>`;
+  }).join('');
+
+  return `
+    <table>
+      <thead>
+        <tr>
+          <th>Order ID</th>
+          <th>Customer</th>
+          <th>Status</th>
+          <th>Total</th>
+          <th>Payment</th>
+          <th>Date</th>
+          ${!mini ? '<th>Update Status</th>' : ''}
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+/**
+ * Update a single order's status field in Firestore.
+ * The real-time listener will auto-update the UI.
+ */
+async function updateOrderStatus(orderId, newStatus) {
+  try {
+    await db.collection('orders').doc(orderId).update({
+      status    : newStatus,
+      updatedAt : firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast(`Order status → ${newStatus} ✅`);
+  } catch (err) {
+    console.error('updateOrderStatus:', err);
+    showToast('Failed to update status ❌', 'error');
+  }
+}
+
+
+// ═════════════════════════════════════════════════════════════════
+// ORDER DETAIL DRAWER
+// ═════════════════════════════════════════════════════════════════
+
+function openOrderDrawer(orderId) {
+  const o = state.orders.find(o => o.id === orderId);
+  if (!o) return;
+
+  state.drawerOrderId = orderId;
+  const sid    = o.id.slice(-7).toUpperCase();
+  const status = o.status || 'placed';
+  const date   = formatDate(o.createdAt);
+
+  // Build items list
+  const itemsHTML = (o.items || []).map(i => `
+    <div class="dr-item">
+      <span>${i.name}
+        <span style="color:#aaa;font-size:.78rem"> × ${i.qty} ${i.unit || ''}</span>
+      </span>
+      <span class="fw700">₹${((i.price || 0) * (i.qty || 1)).toFixed(2)}</span>
+    </div>`).join('');
+
+  document.getElementById('drawerTitle').textContent = `Order #${sid}`;
+  document.getElementById('drawerContent').innerHTML = `
+
+    <!-- Status badge + date -->
+    <div class="flex gap8" style="margin-bottom:16px">
+      <span class="badge b-${status}">${status}</span>
+      <span class="fsm fsub">${date}</span>
+    </div>
+
+    <!-- Customer info -->
+    <div class="dr-section">
+      <h4>Customer Info</h4>
+      <div class="dr-row"><span class="k">Name</span>    <span class="v">${o.address?.name  || '—'}</span></div>
+      <div class="dr-row"><span class="k">Email</span>   <span class="v fsm">${o.userEmail   || '—'}</span></div>
+      <div class="dr-row"><span class="k">Phone</span>   <span class="v">${o.address?.phone || '—'}</span></div>
+      <div class="dr-row"><span class="k">Address</span>
+        <span class="v">${o.address?.addr || ''}, ${o.address?.city || ''} — ${o.address?.pin || ''}</span>
+      </div>
+    </div>
+
+    <!-- Payment info -->
+    <div class="dr-section">
+      <h4>Payment</h4>
+      <div class="dr-row"><span class="k">Method</span>
+        <span class="v" style="text-transform:uppercase">${o.paymentMethod || '—'}</span>
+      </div>
+      ${o.upiRef ? `<div class="dr-row"><span class="k">UTR / Ref</span><span class="v fsm">${o.upiRef}</span></div>` : ''}
+    </div>
+
+    <!-- Items ordered -->
+    <div class="dr-section">
+      <h4>Items Ordered (${(o.items || []).length})</h4>
+      ${itemsHTML || '<p class="fsm fsub">No items recorded</p>'}
+    </div>
+
+    <!-- Price summary -->
+    <div class="dr-section">
+      <h4>Order Summary</h4>
+      <div class="dr-row"><span class="k">Subtotal</span>  <span class="v">₹${(o.subtotal      || 0).toFixed(2)}</span></div>
+      <div class="dr-row"><span class="k">Delivery</span>  <span class="v">₹${(o.deliveryCharge|| 0).toFixed(2)}</span></div>
+      <div class="dr-row fw700" style="font-size:1rem">
+        <span class="k">Total</span>
+        <span class="v rupee">₹${(o.total || 0).toFixed(2)}</span>
+      </div>
+    </div>
+
+    <!-- Status update -->
+    <div class="dr-section">
+      <h4>Update Status</h4>
+      <div class="drawer-status-row">
+        <select id="drawerStatusSel">
+          ${['placed','confirmed','delivered','cancelled'].map(s =>
+            `<option value="${s}" ${status === s ? 'selected' : ''}>${capitalize(s)}</option>`
+          ).join('')}
+        </select>
+        <button class="btn btn-solid" onclick="saveDrawerStatus('${o.id}')">
+          <i class="fas fa-save"></i> Save
+        </button>
+      </div>
+    </div>
+
+    <!-- Convert to debt shortcut -->
+    <div class="dr-section">
+      <button class="btn btn-orange"
+              onclick="prefillDebtFromOrder('${o.id}')">
+        <i class="fas fa-hand-holding-usd"></i> Add as Debt Entry
+      </button>
+    </div>`;
+
+  document.getElementById('drawerOverlay').classList.add('open');
+}
+
+async function saveDrawerStatus(orderId) {
+  const sel = document.getElementById('drawerStatusSel');
+  if (!sel) return;
+  await updateOrderStatus(orderId, sel.value);
+  closeDrawer();
+}
+
+function closeDrawer() {
+  document.getElementById('drawerOverlay').classList.remove('open');
+  state.drawerOrderId = null;
+}
+
+function handleOverlayClick(e) {
+  if (e.target === document.getElementById('drawerOverlay')) closeDrawer();
+}
+
+/** Pre-fill the debt form from a selected order */
+function prefillDebtFromOrder(orderId) {
+  const o = state.orders.find(o => o.id === orderId);
+  if (!o) return;
+  closeDrawer();
+  switchPanel('debts');
+  setTimeout(() => {
+    setVal('dName',   o.address?.name  || '');
+    setVal('dPhone',  o.address?.phone || '');
+    setVal('dEmail',  o.userEmail      || '');
+    setVal('dAmount', o.total          || '');
+    setVal('dNote',   `Order #${o.id.slice(-7).toUpperCase()} — ${formatDate(o.createdAt)}`);
+    setVal('dDate',   new Date().toISOString().slice(0, 10));
+    document.getElementById('dAmount').focus();
+  }, 180);
+}
+
+
+// ═════════════════════════════════════════════════════════════════
+// PRODUCTS PANEL — full CRUD
+// ═════════════════════════════════════════════════════════════════
+
+/** Render the product table with current filters */
+function renderProductsPanel() {
+  const q       = getVal('prodSearch').toLowerCase();
+  const catF    = getVal('prodCatFilter');
+  const stockF  = getVal('prodStockFilter');
+
+  let list = state.products;
+
+  if (catF !== 'all') list = list.filter(p => (p.category || '') === catF);
+  if (stockF === 'in')  list = list.filter(p => (p.stock ?? 0) > 5);
+  if (stockF === 'low') list = list.filter(p => (p.stock ?? 0) > 0 && (p.stock ?? 0) <= 5);
+  if (stockF === 'out') list = list.filter(p => (p.stock ?? 0) <= 0);
+  if (q) {
+    list = list.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      (p.category || '').toLowerCase().includes(q)
+    );
+  }
+
+  const el = document.getElementById('productsTable');
+
+  if (!list.length) {
+    el.innerHTML = emptyState('fa-box-open', 'No products match');
+    return;
+  }
+
+  const rows = list.map(p => {
+    const inStock  = (p.stock ?? 0) > 5;
+    const lowStock = (p.stock ?? 0) > 0 && (p.stock ?? 0) <= 5;
+    const stockBadge = inStock  ? `<span class="badge b-delivered">${p.stock} in stock</span>`
+                    : lowStock ? `<span class="badge b-confirmed">Low (${p.stock})</span>`
+                    :            `<span class="badge b-cancelled">Out of stock</span>`;
+    const imgHTML = p.imageUrl
+      ? `<img src="${p.imageUrl}" width="42" height="42"
+             style="border-radius:9px;object-fit:cover;vertical-align:middle"
+             onerror="this.style.display='none'" />`
+      : `<span style="font-size:1.4rem">🛒</span>`;
+
+    return `
+      <tr>
+        <td>${imgHTML}</td>
+        <td>
+          <div class="fw700">${p.name}</div>
+          ${p.description ? `<div class="fsm fsub">${p.description.slice(0, 50)}${p.description.length > 50 ? '…' : ''}</div>` : ''}
+        </td>
+        <td>
+          <span class="badge b-placed" style="text-transform:capitalize">
+            ${p.category || '—'}
+          </span>
+        </td>
+        <td class="fw700">₹${p.price || 0}</td>
+        <td class="fsub">${p.unit || '—'}</td>
+        <td>${stockBadge}</td>
+        <td>
+          <button class="icon-btn btn-orange"
+                  onclick="openQuickEdit('${p.id}')"
+                  title="Quick edit price/stock"
+                  style="margin-right:4px">
+            <i class="fas fa-bolt"></i>
+          </button>
+          <button class="icon-btn btn-blue"
+                  onclick="startEditProduct('${p.id}')"
+                  title="Edit full product"
+                  style="margin-right:4px">
+            <i class="fas fa-edit"></i>
+          </button>
+          <button class="icon-btn btn-red"
+                  onclick="deleteProduct('${p.id}', '${p.name.replace(/'/g, "\\'")}')"
+                  title="Delete product">
+            <i class="fas fa-trash"></i>
+          </button>
+        </td>
+      </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>Name</th>
+          <th>Category</th>
+          <th>Price</th>
+          <th>Unit</th>
+          <th>Stock</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+/**
+ * Save a product (add new OR update existing).
+ * Reads editProductId to decide which operation.
+ */
+async function saveProduct() {
+  const editId = getVal('editProductId');
+  const name   = getVal('pName').trim();
+  const cat    = getVal('pCategory');
+  const price  = parseFloat(getVal('pPrice'));
+  const unit   = getVal('pUnit').trim();
+  const stock  = parseInt(getVal('pStock'), 10);
+  const imgUrl = getVal('pImageUrl').trim();
+  const desc   = getVal('pDesc').trim();
+
+  // ── Validation ────────────────────────────────────────────────
+  if (!name)                  { showToast('Product name is required', 'error'); return; }
+  if (!cat)                   { showToast('Please select a category', 'error'); return; }
+  if (isNaN(price) || price < 0) { showToast('Enter a valid price', 'error'); return; }
+  if (isNaN(stock) || stock < 0) { showToast('Enter a valid stock quantity', 'error'); return; }
+
+  const btn = document.getElementById('saveProductBtn');
+  btn.disabled = true;
+
+  const data = {
+    name, category: cat, price, unit, stock,
+    imageUrl    : imgUrl || '',
+    description : desc || '',
+    updatedAt   : firebase.firestore.FieldValue.serverTimestamp()
+  };
+
+  try {
+    if (editId) {
+      // ── UPDATE existing product ──────────────────────────────
+      await db.collection('products').doc(editId).update(data);
+      showToast(`${name} updated ✅`);
+    } else {
+      // ── ADD new product ──────────────────────────────────────
+      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      await db.collection('products').add(data);
+      showToast(`${name} added to store ✅`);
+    }
+    clearProductForm();
+  } catch (err) {
+    console.error('saveProduct:', err);
+    showToast('Save failed — check console for details ❌', 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/** Populate the product form fields for editing */
+function startEditProduct(productId) {
+  const p = state.products.find(p => p.id === productId);
+  if (!p) return;
+
+  switchPanel('products');
+  setVal('editProductId', p.id);
+  setVal('pName',     p.name       || '');
+  setVal('pCategory', p.category   || '');
+  setVal('pPrice',    p.price      ?? '');
+  setVal('pUnit',     p.unit       || '');
+  setVal('pStock',    p.stock      ?? '');
+  setVal('pImageUrl', p.imageUrl   || '');
+  setVal('pDesc',     p.description|| '');
+
+  // Switch form UI to "edit mode"
+  document.getElementById('productFormTitle').textContent  = '✏️ Edit Product';
+  document.getElementById('saveProductBtnText').textContent= 'Update Product';
+  document.getElementById('cancelEditBtn').style.display   = 'inline-flex';
+
+  // Scroll to form
+  document.getElementById('productFormCard').scrollIntoView({ behavior: 'smooth' });
+}
+
+function cancelProductEdit() {
+  clearProductForm();
+  showToast('Edit cancelled', 'info', 2000);
+}
+
+function clearProductForm() {
+  ['editProductId','pName','pPrice','pUnit','pStock','pImageUrl','pDesc'].forEach(id => setVal(id, ''));
+  setVal('pCategory', '');
+  document.getElementById('productFormTitle').textContent  = 'Add New Product';
+  document.getElementById('saveProductBtnText').textContent= 'Save Product';
+  document.getElementById('cancelEditBtn').style.display   = 'none';
+}
+
+/** Delete a product after confirmation */
+async function deleteProduct(productId, productName) {
+  if (!confirm(`Delete "${productName}" permanently? This cannot be undone.`)) return;
+  try {
+    await db.collection('products').doc(productId).delete();
+    showToast(`${productName} deleted ✅`);
+  } catch (err) {
+    console.error('deleteProduct:', err);
+    showToast('Delete failed ❌', 'error');
+  }
+}
+
+// ── Quick Edit Modal (price + stock only) ──────────────────────
+
+function openQuickEdit(productId) {
+  const p = state.products.find(p => p.id === productId);
+  if (!p) return;
+  setVal('qeProductId', p.id);
+  setVal('qePrice',     p.price ?? '');
+  setVal('qeStock',     p.stock ?? '');
+  document.getElementById('qeModalTitle').textContent = `Quick Edit: ${p.name}`;
+  document.getElementById('quickEditModal').classList.add('open');
+}
+
+async function saveQuickEdit() {
+  const productId = getVal('qeProductId');
+  const price = parseFloat(getVal('qePrice'));
+  const stock = parseInt(getVal('qeStock'), 10);
+
+  if (isNaN(price) || price < 0) { showToast('Enter valid price', 'error'); return; }
+  if (isNaN(stock) || stock < 0) { showToast('Enter valid stock', 'error'); return; }
+
+  try {
+    await db.collection('products').doc(productId).update({
+      price, stock,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast('Price & stock updated ✅');
+    closeQuickEdit();
+  } catch (err) {
+    console.error('saveQuickEdit:', err);
+    showToast('Update failed ❌', 'error');
+  }
+}
+
+function closeQuickEdit() {
+  document.getElementById('quickEditModal').classList.remove('open');
+}
+
+function handleModalClick(e) {
+  if (e.target === document.getElementById('quickEditModal')) closeQuickEdit();
+}
+
+
+// ═════════════════════════════════════════════════════════════════
+// DEBTS PANEL — full CRUD with inline editing
+// ═════════════════════════════════════════════════════════════════
+
+/**
+ * Save a debt entry.
+ * If editDebtId is set → UPDATE existing doc.
+ * Otherwise → ADD new doc.
+ */
+async function saveDebt() {
+  const editId = getVal('editDebtId');
+  const name   = getVal('dName').trim();
+  const phone  = getVal('dPhone').trim();
+  const email  = getVal('dEmail').trim();
+  const amount = parseFloat(getVal('dAmount'));
+  const date   = getVal('dDate');
+  const status = getVal('dStatus');
+  const note   = getVal('dNote').trim();
+
+  // ── Validation ────────────────────────────────────────────────
+  if (!name)                    { showToast('Customer name is required', 'error'); return; }
+  if (!phone)                   { showToast('Phone number is required', 'error');  return; }
+  if (isNaN(amount) || amount < 1) { showToast('Enter a valid amount (≥ ₹1)', 'error'); return; }
+  if (!date)                    { showToast('Date is required', 'error');          return; }
+
+  const btn = document.getElementById('saveDebtBtn');
+  btn.disabled = true;
+  setText('debtFormMsg', 'Saving…');
+
+  try {
+    if (editId) {
+      // ── UPDATE existing debt ─────────────────────────────────
+      await db.collection('debts').doc(editId).update({
+        userName  : name,
+        phone,
+        userEmail : email,
+        amount,
+        debtDate  : date,
+        status,
+        note,
+        // If status changed to paid, set remaining to 0
+        remaining : status === 'paid' ? 0 : amount,
+        updatedAt : firebase.firestore.FieldValue.serverTimestamp()
+      });
+      showToast(`Debt for ${name} updated ✅`);
+    } else {
+      // ── ADD new debt ─────────────────────────────────────────
+      const newDebt = {
+        userName  : name,
+        phone,
+        userEmail : email || '',
+        amount,
+        remaining : amount,   // full amount outstanding initially
+        debtDate  : date,
+        status    : 'pending',
+        note,
+        payments  : [],        // array of {amount, date, note} objects
+        createdAt : firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt : firebase.firestore.FieldValue.serverTimestamp()
+      };
+      await db.collection('debts').add(newDebt);
+
+      // Mirror total to user_debts (for customer-facing my-debt.html page)
+      if (email) {
+        await db.collection('user_debts').doc(email).set({
+          email,
+          name,
+          phone,
+          totalDebt : firebase.firestore.FieldValue.increment(amount),
+          updatedAt : firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+
+      showToast(`Debt ₹${amount} added for ${name} ✅`);
+    }
+
+    clearDebtForm();
+  } catch (err) {
+    console.error('saveDebt:', err);
+    showToast('Save failed — check console ❌', 'error');
+  } finally {
+    btn.disabled = false;
+    setText('debtFormMsg', '');
+  }
+}
+
+/** Put a debt entry into edit mode (fills the form at the top) */
+function startEditDebt(debtId) {
+  const d = state.debts.find(d => d.id === debtId);
+  if (!d) return;
+
+  setVal('editDebtId', d.id);
+  setVal('dName',   d.userName  || '');
+  setVal('dPhone',  d.phone     || '');
+  setVal('dEmail',  d.userEmail || '');
+  setVal('dAmount', d.amount    ?? '');
+  setVal('dDate',   d.debtDate  || new Date().toISOString().slice(0, 10));
+  setVal('dStatus', d.status    || 'pending');
+  setVal('dNote',   d.note      || '');
+
+  // Switch form to edit mode
+  document.getElementById('debtFormTitle').textContent    = '✏️ Edit Debt Entry';
+  document.getElementById('saveDebtBtnText').textContent  = 'Update Debt';
+  document.getElementById('cancelDebtBtn').style.display  = 'inline-flex';
+
+  // Scroll to form
+  document.querySelector('#panel-debts .form-card').scrollIntoView({ behavior: 'smooth' });
+  showToast('Debt entry loaded into form — make changes and save', 'info');
+}
+
+function cancelDebtEdit() {
+  clearDebtForm();
+  showToast('Edit cancelled', 'info', 2000);
+}
+
+function clearDebtForm() {
+  ['editDebtId','dName','dPhone','dEmail','dAmount','dNote'].forEach(id => setVal(id, ''));
+  setVal('dDate',   new Date().toISOString().slice(0, 10));
+  setVal('dStatus', 'pending');
+  document.getElementById('debtFormTitle').textContent   = 'Add New Debt Entry';
+  document.getElementById('saveDebtBtnText').textContent = 'Add Debt';
+  document.getElementById('cancelDebtBtn').style.display = 'none';
+}
+
+/**
+ * Record a partial payment against a debt.
+ * Reduces 'remaining', appends to 'payments' array.
+ */
+async function recordDebtPayment(debtId) {
+  const d   = state.debts.find(d => d.id === debtId);
+  if (!d) return;
+
+  const inp = document.getElementById(`payInput-${debtId}`);
+  const amt = parseFloat(inp?.value);
+  const rem = d.remaining ?? d.amount ?? 0;
+
+  if (!amt || amt <= 0 || amt > rem) {
+    showToast(`Enter an amount between ₹1 and ₹${rem}`, 'error');
+    return;
+  }
+
+  const newRemaining = parseFloat((rem - amt).toFixed(2));
+  const newStatus    = newRemaining === 0 ? 'paid' : 'partial';
+
+  // Payment history entry
+  const payEntry = {
+    amount : amt,
+    date   : new Date().toISOString(),
+    note   : 'Admin recorded payment'
+  };
+
+  try {
+    await db.collection('debts').doc(debtId).update({
+      remaining : newRemaining,
+      status    : newStatus,
+      payments  : firebase.firestore.FieldValue.arrayUnion(payEntry),
+      updatedAt : firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Keep user_debts mirror in sync
+    if (d.userEmail) {
+      await db.collection('user_debts').doc(d.userEmail).set({
+        totalDebt : firebase.firestore.FieldValue.increment(-amt),
+        updatedAt : firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+
+    showToast(`₹${amt} payment recorded for ${d.userName} ✅`);
+    if (inp) inp.value = '';
+  } catch (err) {
+    console.error('recordDebtPayment:', err);
+    showToast('Payment record failed ❌', 'error');
+  }
+}
+
+/** Mark a debt as fully paid (zero remaining) */
+async function markDebtFullyPaid(debtId) {
+  const d = state.debts.find(d => d.id === debtId);
+  if (!d) return;
+
+  const rem = d.remaining ?? d.amount ?? 0;
+  const payEntry = {
+    amount : rem,
+    date   : new Date().toISOString(),
+    note   : 'Marked fully paid by admin'
+  };
+
+  try {
+    await db.collection('debts').doc(debtId).update({
+      remaining : 0,
+      status    : 'paid',
+      payments  : firebase.firestore.FieldValue.arrayUnion(payEntry),
+      updatedAt : firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    if (d.userEmail) {
+      await db.collection('user_debts').doc(d.userEmail).set({
+        totalDebt : firebase.firestore.FieldValue.increment(-rem),
+        updatedAt : firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+
+    showToast(`${d.userName} debt marked as fully paid ✅`);
+  } catch (err) {
+    console.error('markDebtFullyPaid:', err);
+    showToast('Failed ❌', 'error');
+  }
+}
+
+/** Permanently delete a debt entry */
+async function deleteDebt(debtId) {
+  const d = state.debts.find(d => d.id === debtId);
+  if (!confirm(`Delete debt entry for "${d?.userName || 'this customer'}" permanently?`)) return;
+
+  try {
+    await db.collection('debts').doc(debtId).delete();
+
+    // Adjust user_debts mirror
+    if (d && d.userEmail && d.status !== 'paid') {
+      const outstanding = d.remaining ?? d.amount ?? 0;
+      await db.collection('user_debts').doc(d.userEmail).set({
+        totalDebt : firebase.firestore.FieldValue.increment(-outstanding),
+        updatedAt : firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+
+    showToast('Debt entry deleted ✅');
+  } catch (err) {
+    console.error('deleteDebt:', err);
+    showToast('Delete failed ❌', 'error');
+  }
+}
+
+/** Render the debt cards grid with current filters */
+function renderDebtsPanel() {
+  const statusF = getVal('debtStatusFilter');
+  const sortF   = getVal('debtSortFilter');
+  const q       = getVal('debtSearch').toLowerCase();
+
+  let list = [...state.debts];
+
+  // Filter
+  if (statusF !== 'all') list = list.filter(d => d.status === statusF);
+  if (q) {
+    list = list.filter(d =>
+      (d.userName || '').toLowerCase().includes(q) ||
+      (d.phone    || '').toLowerCase().includes(q) ||
+      (d.userEmail|| '').toLowerCase().includes(q)
+    );
+  }
+
+  // Sort
+  switch (sortF) {
+    case 'date-asc':    list.sort((a, b) => toMs(a.createdAt) - toMs(b.createdAt)); break;
+    case 'date-desc':   list.sort((a, b) => toMs(b.createdAt) - toMs(a.createdAt)); break;
+    case 'amount-desc': list.sort((a, b) => (b.amount || 0) - (a.amount || 0));     break;
+    case 'amount-asc':  list.sort((a, b) => (a.amount || 0) - (b.amount || 0));     break;
+  }
+
+  const container = document.getElementById('debtCardsContainer');
+
+  if (!list.length) {
+    container.innerHTML = `<div class="debt-grid">${emptyState('fa-smile', 'No debts match — all clear! 🎉')}</div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="debt-grid">
+      ${list.map(d => buildDebtCard(d)).join('')}
+    </div>`;
+}
+
+/** Build the HTML for a single debt card */
+function buildDebtCard(d) {
+  const isPaid     = d.status === 'paid';
+  const remaining  = d.remaining ?? d.amount ?? 0;
+  const paidSoFar  = (d.amount || 0) - remaining;
+  const pct        = d.amount > 0 ? Math.round((paidSoFar / d.amount) * 100) : 0;
+  const dateLabel  = d.debtDate
+    ? new Date(d.debtDate).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' })
+    : formatDate(d.createdAt);
+
+  // Payment history rows (last 4, most recent first)
+  const histHTML = (d.payments || []).slice().reverse().slice(0, 4).map(p => {
+    const pd = p.date
+      ? new Date(p.date).toLocaleDateString('en-IN', { day:'numeric', month:'short' })
+      : '—';
+    return `
+      <div class="pay-hist-row">
+        <span>✅ ${pd} — ${p.note || 'Payment'}</span>
+        <span class="credit">−₹${(p.amount || 0).toFixed(2)}</span>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="debt-card ${isPaid ? 'is-paid' : ''}">
+
+      <!-- Header: name + amount -->
+      <div class="dc-head">
+        <div>
+          <div class="dc-name">${d.userName}</div>
+          <div class="dc-meta">
+            ${d.phone ? `<i class="fas fa-phone" style="font-size:.6rem"></i> ${d.phone}` : ''}
+            ${d.userEmail ? `<br>${d.userEmail}` : ''}
+            <br>📅 ${dateLabel}
+          </div>
+        </div>
+        <div class="dc-right">
+          <div class="dc-amount ${isPaid ? 'cleared' : ''}">
+            ₹${remaining.toLocaleString('en-IN')}
+          </div>
+          <div class="dc-of">of ₹${(d.amount || 0).toLocaleString('en-IN')}</div>
+          <span class="badge b-${d.status}" style="margin-top:5px">${d.status}</span>
+        </div>
+      </div>
+
+      <!-- Note / reason -->
+      ${d.note ? `<div class="dc-note">📝 ${d.note}</div>` : ''}
+
+      <!-- Progress bar (shows how much has been paid) -->
+      ${d.amount > 0 ? `
+        <div class="prog-labels">
+          <span>Paid: ₹${paidSoFar.toFixed(2)}</span>
+          <span>${pct}%</span>
+        </div>
+        <div class="prog-bar">
+          <div class="prog-fill" style="width:${pct}%"></div>
+        </div>` : ''}
+
+      <!-- Payment history -->
+      ${histHTML ? `
+        <div class="pay-hist">
+          <div class="pay-hist-title">Payment History</div>
+          ${histHTML}
+        </div>` : ''}
+
+      <!-- Record payment input (only if not fully paid) -->
+      ${!isPaid ? `
+        <div class="pay-input-row">
+          <input type="number"
+                 id="payInput-${d.id}"
+                 placeholder="₹ amount received"
+                 min="1"
+                 max="${remaining}"
+                 step="0.01" />
+          <button class="btn btn-green" onclick="recordDebtPayment('${d.id}')">
+            <i class="fas fa-check"></i> Record
+          </button>
+          <button class="btn btn-blue" onclick="markDebtFullyPaid('${d.id}')">
+            Full Paid
+          </button>
+        </div>` : `
+        <div style="color:var(--green-mid);font-weight:700;font-size:.85rem;margin:10px 0 8px">
+          ✅ Fully Settled
+        </div>`}
+
+      <!-- Card actions: edit / delete -->
+      <div class="dc-actions">
+        <button class="btn btn-orange" onclick="startEditDebt('${d.id}')">
+          <i class="fas fa-edit"></i> Edit
+        </button>
+        <button class="btn btn-red" onclick="deleteDebt('${d.id}')">
+          <i class="fas fa-trash"></i> Delete
+        </button>
+      </div>
+
+    </div>`;
+}
+
+/** Compact debt table used in overview panel */
+function buildDebtSnapshotTable(debts) {
+  const rows = debts.map(d => {
+    const rem = d.remaining ?? d.amount ?? 0;
+    return `
+      <tr>
+        <td>
+          <div class="fw700">${d.userName}</div>
+          <div class="fsm fsub">${d.phone || d.userEmail || '—'}</div>
+        </td>
+        <td class="fw700" style="color:var(--orange)">₹${rem.toLocaleString('en-IN')}</td>
+        <td><span class="badge b-${d.status}">${d.status}</span></td>
+        <td class="fsm fsub" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          ${d.note || '—'}
+        </td>
+        <td>
+          <button class="btn btn-orange" style="padding:4px 9px;font-size:.74rem"
+                  onclick="switchPanel('debts')">
+            Manage
+          </button>
+        </td>
+      </tr>`;
+  }).join('');
+
+  return `
+    <table>
+      <thead>
+        <tr>
+          <th>Customer</th><th>Remaining</th><th>Status</th><th>Note</th><th></th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+
+// ═════════════════════════════════════════════════════════════════
+// CUSTOMERS PANEL
+// ═════════════════════════════════════════════════════════════════
+
+function renderCustomersPanel() {
+  const q = getVal('custSearch').toLowerCase();
+
+  // Aggregate customers from orders (no separate collection needed)
+  const map = {};
+  state.orders.forEach(o => {
+    const key = o.userEmail || 'unknown';
+    if (!map[key]) {
+      map[key] = {
+        email  : key,
+        name   : o.address?.name  || '—',
+        phone  : o.address?.phone || '—',
+        orders : 0,
+        spent  : 0
+      };
+    }
+    map[key].orders++;
+    map[key].spent += (o.total || 0);
+  });
+
+  let list = Object.values(map).sort((a, b) => b.spent - a.spent);
+
+  if (q) {
+    list = list.filter(c =>
+      c.name.toLowerCase().includes(q) ||
+      c.email.toLowerCase().includes(q)
+    );
+  }
+
+  const el = document.getElementById('customersTable');
+
+  if (!list.length) {
+    el.innerHTML = emptyState('fa-users', 'No customers yet');
+    return;
+  }
+
+  const rows = list.map(c => {
+    // Sum all unpaid debt for this customer
+    const debtAmt = state.debts
+      .filter(d => d.userEmail === c.email && d.status !== 'paid')
+      .reduce((sum, d) => sum + (d.remaining ?? d.amount ?? 0), 0);
+
+    return `
+      <tr>
+        <td>
+          <div class="fw700">${c.name}</div>
+          <div class="fsm fsub">${c.phone}</div>
+        </td>
+        <td class="fsm fsub">${c.email}</td>
+        <td style="text-align:center;font-weight:700">${c.orders}</td>
+        <td class="fw700">₹${c.spent.toLocaleString('en-IN')}</td>
+        <td>
+          ${debtAmt > 0
+            ? `<span style="color:var(--red);font-weight:700">₹${debtAmt.toLocaleString('en-IN')}</span>`
+            : `<span style="color:var(--green-mid);font-weight:600">Clear ✅</span>`}
+        </td>
+        <td>
+          ${debtAmt > 0 ? `
+            <button class="btn btn-orange" style="font-size:.74rem"
+                    onclick="quickAddDebt('${c.email}','${c.name.replace(/'/g, "\\'")}','${c.phone}')">
+              <i class="fas fa-plus"></i> Add Debt
+            </button>` : ''}
+        </td>
+      </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Customer</th>
+          <th>Email</th>
+          <th style="text-align:center">Orders</th>
+          <th>Total Spent</th>
+          <th>Pending Debt</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+/** Jump to debts panel with customer pre-filled */
+function quickAddDebt(email, name, phone) {
+  switchPanel('debts');
+  setTimeout(() => {
+    setVal('dEmail', email);
+    setVal('dName',  name);
+    setVal('dPhone', phone);
+    setVal('dDate',  new Date().toISOString().slice(0, 10));
+    document.getElementById('dAmount').focus();
+    document.querySelector('#panel-debts .form-card').scrollIntoView({ behavior: 'smooth' });
+  }, 150);
+}
+
+
+// ═════════════════════════════════════════════════════════════════
+// AUTH — LOGOUT
+// ═════════════════════════════════════════════════════════════════
+
+async function handleLogout() {
+  // Unsubscribe from all Firestore listeners before signing out
+  Object.values(unsubs).forEach(unsub => {
+    if (typeof unsub === 'function') unsub();
+  });
+  await auth.signOut();
+  window.location.href = 'login.html';
+}
+
+
+// ═════════════════════════════════════════════════════════════════
+// UTILITY / HELPER FUNCTIONS
+// ═════════════════════════════════════════════════════════════════
+
+/** Get the value of an input/select by element ID */
+function getVal(id) {
+  return document.getElementById(id)?.value || '';
+}
+
+/** Set the value of an input/select/textarea by element ID */
+function setVal(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.value = value;
+}
+
+/** Set textContent of an element by ID */
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+/**
+ * Format a Firestore Timestamp or ISO string to a human-readable date.
+ * Returns '—' if null/undefined.
+ */
+function formatDate(ts) {
+  if (!ts) return '—';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString('en-IN', {
+    day: 'numeric', month: 'short', year: 'numeric'
+  });
+}
+
+/** Convert a Firestore Timestamp to milliseconds (for sorting) */
+function toMs(ts) {
+  if (!ts) return 0;
+  return ts.toDate ? ts.toDate().getTime() : new Date(ts).getTime();
+}
+
+/** Format a number with Indian locale (e.g. 1,00,000) */
+function fmt(n) {
+  return Number(n).toLocaleString('en-IN');
+}
+
+/** Capitalise first letter of a string */
+function capitalize(s) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+}
+
+/** Generate an empty-state placeholder HTML */
+function emptyState(faIcon, message) {
+  return `
+    <div class="empty-state">
+      <i class="fas ${faIcon}"></i>
+      <p>${message}</p>
+    </div>`;
+}
+</script>
+</body>
+</html>

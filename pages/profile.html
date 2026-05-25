@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Profile - Appa Kadai</title>
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Profile Header -->
+<div class="profile-header" id="profileHeader">
+  <div class="loading-wrap" style="padding:20px">
+    <div class="spinner" style="border-top-color:#fff"></div>
+  </div>
+</div>
+
+<!-- Profile Body -->
+<div class="profile-body">
+
+  <!-- User Info Card -->
+  <div class="profile-card" id="userInfoCard" style="display:none">
+    <h3>👤 Unga Details</h3>
+    <div id="userDetails"></div>
+  </div>
+
+  <!-- Menu Card -->
+  <div class="profile-card">
+    <h3>⚙️ Options</h3>
+
+    <div class="profile-menu-item" onclick="window.location.href='../index.html'">
+      <i class="fas fa-store"></i>
+      <span>Shopping Poga</span>
+      <i class="fas fa-chevron-right arrow"></i>
+    </div>
+
+    <div class="profile-menu-item" onclick="window.location.href='cart.html'">
+      <i class="fas fa-shopping-cart"></i>
+      <span>Unga Cart</span>
+      <i class="fas fa-chevron-right arrow"></i>
+    </div>
+
+    <div class="profile-menu-item" onclick="window.location.href='order.html'">
+      <i class="fas fa-receipt"></i>
+      <span>Order Pannu</span>
+      <i class="fas fa-chevron-right arrow"></i>
+    </div>
+
+    <div class="profile-menu-item" id="adminMenuItem" style="display:none"
+         onclick="window.location.href='../admin/admin.html'">
+      <i class="fas fa-cog" style="color:#1a237e"></i>
+      <span style="color:#1a237e;font-weight:700">Admin Dashboard</span>
+      <i class="fas fa-chevron-right arrow"></i>
+    </div>
+  </div>
+
+  <!-- Logout Card -->
+  <div class="profile-card">
+    <button class="btn btn-red btn-full" id="logoutBtn">
+      <i class="fas fa-sign-out-alt"></i> Logout Pannu
+    </button>
+  </div>
+
+  <!-- Not logged in state -->
+  <div class="profile-card" id="loginPrompt" style="display:none;text-align:center">
+    <p style="color:var(--text-muted);margin-bottom:14px">Login pannaatha? Account venam!</p>
+    <a href="login.html" class="btn btn-green btn-full">
+      <i class="fas fa-sign-in-alt"></i> Login Pannu
+    </a>
+  </div>
+
+</div>
+
+<!-- Bottom Nav -->
+<nav class="bottom-nav">
+  <a href="../index.html"><i class="fas fa-home"></i> Home</a>
+  <a href="cart.html"><i class="fas fa-shopping-cart"></i> Cart</a>
+  <a href="order.html"><i class="fas fa-receipt"></i> Order</a>
+  <a href="profile.html" class="active"><i class="fas fa-user"></i> Profile</a>
+</nav>
+
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+// =============================================
+// 👤 Profile Page Logic
+// =============================================
+
+auth.onAuthStateChanged(async user => {
+  const header = document.getElementById("profileHeader");
+
+  if (!user) {
+    // Not logged in
+    header.innerHTML = `
+      <div class="profile-avatar"><i class="fas fa-user-slash"></i></div>
+      <div class="profile-name">Login aagala</div>
+      <div class="profile-email">Account-la login pannu</div>
+    `;
+    document.getElementById("loginPrompt").style.display = "block";
+    document.getElementById("logoutBtn").style.display = "none";
+    return;
+  }
+
+  // Show user info in header
+  const initials = (user.displayName || user.email || "U")[0].toUpperCase();
+  header.innerHTML = `
+    <div class="profile-avatar">${initials}</div>
+    <div class="profile-name">${user.displayName || "Customer"}</div>
+    <div class="profile-email">${user.email}</div>
+  `;
+
+  // Show user details
+  document.getElementById("userInfoCard").style.display = "block";
+  let extraInfo = "";
+  try {
+    const doc = await db.collection("users").doc(user.uid).get();
+    if (doc.exists) {
+      const d = doc.data();
+      if (d.phone) extraInfo = `<div style="font-size:0.88rem;color:var(--text-muted);margin-top:4px">📞 ${d.phone}</div>`;
+    }
+  } catch (_) {}
+
+  document.getElementById("userDetails").innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div><strong>Peyar:</strong> ${user.displayName || "—"}</div>
+      <div><strong>Email:</strong> ${user.email}</div>
+      ${extraInfo}
+      <div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px">
+        Member since: ${user.metadata.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString("en-IN") : "—"}
+      </div>
+    </div>
+  `;
+
+  // Show admin menu if admin
+  if (user.email === ADMIN_EMAIL) {
+    document.getElementById("adminMenuItem").style.display = "flex";
+  }
+});
+
+// Logout
+document.getElementById("logoutBtn").addEventListener("click", async () => {
+  if (!confirm("Logout pannalama?")) return;
+  await auth.signOut();
+  showToast("Logout achu! Bye 👋");
+  setTimeout(() => window.location.href = "../index.html", 800);
+});
+</script>
+</body>
+</html>

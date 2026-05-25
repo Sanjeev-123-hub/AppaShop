@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cart 🛒 - Appa Kadai</title>
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <style>
+    .cart-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #fff;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+    }
+    .cart-item img {
+      width: 64px;
+      height: 64px;
+      object-fit: cover;
+      border-radius: 8px;
+      background: #f1f8e9;
+    }
+    .cart-item-info { flex: 1; }
+    .cart-item-name { font-weight: 600; font-size: 0.95rem; color: #222; }
+    .cart-item-unit { font-size: 0.78rem; color: #888; }
+    .cart-item-price { font-weight: 700; color: var(--green, #2e7d32); margin-top: 2px; }
+    .qty-control {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #f1f8e9;
+      border-radius: 20px;
+      padding: 4px 8px;
+    }
+    .qty-control button {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      border: none;
+      background: var(--green, #2e7d32);
+      color: #fff;
+      font-size: 1.1rem;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .qty-control span { min-width: 20px; text-align: center; font-weight: 700; }
+    .cart-summary {
+      background: #fff;
+      border-radius: 16px;
+      padding: 16px;
+      margin: 16px 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      font-size: 0.95rem;
+      color: #444;
+    }
+    .summary-row.total {
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: #222;
+      border-top: 1px solid #eee;
+      margin-top: 6px;
+      padding-top: 12px;
+    }
+    .checkout-btn {
+      width: 100%;
+      padding: 14px;
+      background: var(--green, #2e7d32);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .checkout-btn:disabled { background: #aaa; cursor: not-allowed; }
+    .empty-cart {
+      text-align: center;
+      padding: 60px 20px;
+      color: #888;
+    }
+    .empty-cart i { font-size: 3rem; margin-bottom: 12px; display: block; }
+    .empty-cart a {
+      display: inline-block;
+      margin-top: 16px;
+      padding: 10px 24px;
+      background: var(--green, #2e7d32);
+      color: #fff;
+      border-radius: 20px;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .page-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #222;
+    }
+    .page-header a { color: #444; }
+  </style>
+</head>
+<body>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<nav class="navbar">
+  <div class="navbar-brand">🛒 <span>Appa</span> Kadai</div>
+  <div class="desktop-nav-links">
+    <a href="../index.html">Home</a>
+    <a href="cart.html" class="active">Cart</a>
+    <a href="profile.html">Profile</a>
+  </div>
+</nav>
+
+<div class="page-header">
+  <a href="../index.html"><i class="fas fa-arrow-left"></i></a>
+  உங்கள் Cart 🛒
+</div>
+
+<div class="page-container">
+  <!-- Loading -->
+  <div id="loadingWrap" class="loading-wrap">
+    <div class="spinner"></div>
+    <p class="text-muted" style="margin-top:8px">Cart load aaguthu...</p>
+  </div>
+
+  <!-- Cart items -->
+  <div id="cartItemsWrap" style="display:none"></div>
+
+  <!-- Empty state -->
+  <div class="empty-cart" id="emptyCart" style="display:none">
+    <i class="fas fa-shopping-cart"></i>
+    <p>Cart empty aaguthu!<br><small>Konjam products add pannunga 😊</small></p>
+    <a href="../index.html">Shopping Pannunga</a>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <a href="../index.html"><i class="fas fa-home"></i> Home</a>
+  <a href="cart.html" class="active"><i class="fas fa-shopping-cart"></i> Cart</a>
+  <a href="order.html"><i class="fas fa-receipt"></i> Order</a>
+  <a href="profile.html"><i class="fas fa-user"></i> Profile</a>
+</nav>
+
+<script src="../js/firebase-config.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+// =============================================
+// 🛒 Cart Page — Per-user Firestore Cart
+// =============================================
+
+let cartItems = [];
+
+// ── Init on auth ready ────────────────────────
+auth.onAuthStateChanged(async user => {
+  if (!user) {
+    window.location.href = "login.html";
+    return;
+  }
+  cartItems = await loadCartFromFirestore();
+  document.getElementById("loadingWrap").style.display = "none";
+  renderCart();
+  await updateCartBadge();
+});
+
+// ── Render cart ───────────────────────────────
+function renderCart() {
+  const wrap  = document.getElementById("cartItemsWrap");
+  const empty = document.getElementById("emptyCart");
+
+  if (!cartItems.length) {
+    wrap.style.display  = "none";
+    empty.style.display = "block";
+    return;
+  }
+
+  empty.style.display = "none";
+  wrap.style.display  = "block";
+  wrap.innerHTML = "";
+
+  // Items
+  cartItems.forEach(item => {
+    const imgSrc = item.imageUrl || `https://placehold.co/64x64/e8f5e9/2e7d32?text=🛒`;
+    const div = document.createElement("div");
+    div.className = "cart-item";
+    div.innerHTML = `
+      <img src="${imgSrc}" alt="${item.name}"
+           onerror="this.src='https://placehold.co/64x64/e8f5e9/2e7d32?text=🛒'" />
+      <div class="cart-item-info">
+        <div class="cart-item-name">${item.name}</div>
+        <div class="cart-item-unit">${item.unit || ""}</div>
+        <div class="cart-item-price">₹${(item.price * item.qty).toFixed(2)}</div>
+      </div>
+      <div class="qty-control">
+        <button onclick="handleQtyChange('${item.id}', -1)">−</button>
+        <span>${item.qty}</span>
+        <button onclick="handleQtyChange('${item.id}', 1)">+</button>
+      </div>
+    `;
+    wrap.appendChild(div);
+  });
+
+  // Summary
+  const subtotal  = calcCartTotal(cartItems);
+  const delivery  = subtotal > 0 ? 30 : 0;
+  const total     = subtotal + delivery;
+
+  const summary = document.createElement("div");
+  summary.className = "cart-summary";
+  summary.innerHTML = `
+    <div class="summary-row"><span>Subtotal</span><span>${formatRupees(subtotal)}</span></div>
+    <div class="summary-row"><span>Delivery</span><span>${delivery === 0 ? "Free" : formatRupees(delivery)}</span></div>
+    <div class="summary-row total"><span>Total</span><span>${formatRupees(total)}</span></div>
+    <button class="checkout-btn" onclick="goToPayment()">
+      <i class="fas fa-credit-card"></i> Payment Pannunga
+    </button>
+    <button class="checkout-btn" style="background:#e53935;margin-top:8px" onclick="handleClearCart()">
+      <i class="fas fa-trash"></i> Cart Clear Pannu
+    </button>
+  `;
+  wrap.appendChild(summary);
+}
+
+// ── Qty change ────────────────────────────────
+async function handleQtyChange(productId, delta) {
+  const item = cartItems.find(i => i.id === productId);
+  if (!item) return;
+  const newQty = item.qty + delta;
+
+  // Optimistic update
+  if (newQty <= 0) {
+    cartItems = cartItems.filter(i => i.id !== productId);
+    showToast("Item remove achu! 🗑️", "error");
+  } else {
+    item.qty = newQty;
+  }
+  renderCart();
+
+  // Persist
+  cartItems = await updateQty(productId, newQty);
+  renderCart();
+}
+
+// ── Clear cart ────────────────────────────────
+async function handleClearCart() {
+  if (!confirm("Cart-la irukka ellathayum remove pannalama?")) return;
+  await clearCart();
+  cartItems = [];
+  renderCart();
+  showToast("Cart clear achu! 🗑️", "error");
+}
+
+// ── Go to payment ─────────────────────────────
+function goToPayment() {
+  if (!cartItems.length) {
+    showToast("Cart empty aaguthu!", "error");
+    return;
+  }
+  window.location.href = "payment.html";
+}
+</script>
+</body>
+</html>

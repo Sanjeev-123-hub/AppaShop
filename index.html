@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Appa Kadai 🛒 - Fresh Groceries</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+
+<!-- ── Toast Container ── -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ── Top Navbar ── -->
+<nav class="navbar">
+  <div class="navbar-brand">🛒 <span>Appa</span> Kadai</div>
+
+  <div class="desktop-nav-links">
+    <a href="index.html" class="active">Home</a>
+    <a href="pages/cart.html">Cart</a>
+    <a href="pages/profile.html">Profile</a>
+  </div>
+
+  <button class="navbar-icon-btn" onclick="window.location='pages/cart.html'" title="Cart">
+    <i class="fas fa-shopping-cart"></i>
+    <span class="badge" id="cartBadge" style="display:none">0</span>
+  </button>
+
+  <button class="navbar-icon-btn" id="profileBtn" title="Profile">
+    <i class="fas fa-user"></i>
+  </button>
+</nav>
+
+<!-- ── Search Bar ── -->
+<div class="search-wrap">
+  <div class="search-box">
+    <i class="fas fa-search"></i>
+    <input type="text" id="searchInput" placeholder="Enna venum? Search pannunga..." />
+    <i class="fas fa-microphone" style="color:#bbb"></i>
+  </div>
+</div>
+
+<!-- ── Hero Banner ── -->
+<div class="hero-banner">
+  <div class="text">
+    <h2>Fresh Groceries! 🌿</h2>
+    <p>Nalla tharathil, namma ooru kadai la</p>
+  </div>
+  <div class="emoji">🥦</div>
+</div>
+
+<!-- ── Category Chips ── -->
+<div class="categories" id="categoryList">
+  <div class="cat-chip active" data-cat="all">
+    <i class="fas fa-th"></i> Ellame
+  </div>
+</div>
+
+<!-- ── Products Section ── -->
+<p class="section-title">🛍️ <span>Products</span> List</p>
+
+<div id="loadingWrap" class="loading-wrap">
+  <div class="spinner"></div>
+  <p class="text-muted" style="margin-top:8px">Products load aaguthu...</p>
+</div>
+
+<div class="products-grid page-container" id="productsGrid" style="display:none"></div>
+
+<div class="empty-state" id="emptyState" style="display:none">
+  <i class="fas fa-box-open"></i>
+  <p>Products illai<br><small>Admin kitte sollungal 😊</small></p>
+</div>
+
+<!-- ── Bottom Navigation ── -->
+<nav class="bottom-nav">
+  <a href="index.html" class="active">
+    <i class="fas fa-home"></i> Home
+  </a>
+  <a href="pages/cart.html">
+    <i class="fas fa-shopping-cart"></i> Cart
+    <span class="badge" id="cartBadge2" style="display:none;position:static;transform:none;background:var(--orange);color:#fff;font-size:0.65rem;padding:1px 5px;border-radius:8px;line-height:1.4"></span>
+  </a>
+  <a href="pages/order.html">
+    <i class="fas fa-receipt"></i> Order
+  </a>
+  <a href="pages/profile.html">
+    <i class="fas fa-user"></i> Profile
+  </a>
+</nav>
+
+<!-- Scripts -->
+<script src="js/firebase-config.js"></script>
+<script src="js/utils.js"></script>
+<script>
+// =============================================
+// 🏠 Home Page Logic — Per-user Firestore Cart
+// =============================================
+
+const CATEGORIES = [
+  { id: "vegetables", label: "🥦 Vegetables" },
+  { id: "fruits",     label: "🍎 Fruits" },
+  { id: "grains",     label: "🌾 Grains" },
+  { id: "dairy",      label: "🥛 Dairy" },
+  { id: "spices",     label: "🌶️ Spices" },
+  { id: "snacks",     label: "🍿 Snacks" },
+  { id: "oil",        label: "🛢️ Oil" },
+  { id: "other",      label: "📦 Other" },
+];
+
+let allProducts = [];
+let activeCategory = "all";
+// Local cache of cart items so we don't hit Firestore on every render
+let cartItemsCache = [];
+
+// ── Wait for auth before loading ─────────────
+auth.onAuthStateChanged(async user => {
+  if (user) {
+    // Load this user's cart into cache
+    cartItemsCache = await loadCartFromFirestore();
+    await updateCartBadge();
+  } else {
+    cartItemsCache = [];
+  }
+  // Always load products (guests can browse, just can't add without login)
+  loadCategories();
+  loadProducts();
+});
+
+// ── Load category chips ───────────────────────
+function loadCategories() {
+  const list = document.getElementById("categoryList");
+  // Remove any already-inserted chips (in case of re-init)
+  list.querySelectorAll(".cat-chip:not([data-cat='all'])").forEach(c => c.remove());
+  CATEGORIES.forEach(cat => {
+    const chip = document.createElement("div");
+    chip.className = "cat-chip";
+    chip.dataset.cat = cat.id;
+    chip.innerHTML = cat.label;
+    chip.addEventListener("click", () => filterCategory(cat.id));
+    list.appendChild(chip);
+  });
+}
+
+// ── Filter by category ────────────────────────
+function filterCategory(catId) {
+  activeCategory = catId;
+  document.querySelectorAll(".cat-chip").forEach(c => {
+    c.classList.toggle("active", c.dataset.cat === catId);
+  });
+  renderProducts();
+}
+
+// ── Load products from Firestore ──────────────
+async function loadProducts() {
+  try {
+    const snap = await db.collection("products").orderBy("name").get();
+    allProducts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    document.getElementById("loadingWrap").style.display = "none";
+    renderProducts();
+  } catch (err) {
+    document.getElementById("loadingWrap").style.display = "none";
+    document.getElementById("emptyState").style.display = "block";
+    console.error("Products load error:", err);
+  }
+}
+
+// ── Render products grid ──────────────────────
+function renderProducts() {
+  const grid    = document.getElementById("productsGrid");
+  const empty   = document.getElementById("emptyState");
+  const query   = document.getElementById("searchInput").value.toLowerCase().trim();
+
+  let filtered = allProducts;
+
+  if (activeCategory !== "all") {
+    filtered = filtered.filter(p => p.category === activeCategory);
+  }
+  if (query) {
+    filtered = filtered.filter(p =>
+      p.name.toLowerCase().includes(query) ||
+      (p.category || "").toLowerCase().includes(query)
+    );
+  }
+
+  grid.style.display  = filtered.length ? "grid" : "none";
+  empty.style.display = filtered.length ? "none"  : "block";
+
+  grid.innerHTML = "";
+  filtered.forEach(product => renderProductCard(product, grid));
+}
+
+// ── Render single product card ─────────────────
+function renderProductCard(product, container) {
+  const cartItem  = cartItemsCache.find(i => i.id === product.id);
+  const inCart    = !!cartItem;
+  const outOfStock = product.stock <= 0;
+
+  const card   = document.createElement("div");
+  card.className = "product-card";
+  const imgSrc = product.imageUrl || "https://placehold.co/200x200/e8f5e9/2e7d32?text=🛒";
+
+  card.innerHTML = `
+    <div class="img-wrap">
+      <img src="${imgSrc}" alt="${product.name}" loading="lazy"
+           onerror="this.src='https://placehold.co/200x200/e8f5e9/2e7d32?text=🛒'" />
+    </div>
+    <div class="card-body">
+      <div class="prod-name">${product.name}</div>
+      <div class="prod-unit">${product.unit || ""}</div>
+      <div class="prod-price"><span class="rupee">₹</span>${product.price}</div>
+      ${outOfStock
+        ? `<div class="out-of-stock">⚠️ Stock illai</div>
+           <button class="add-btn" disabled>Stock Illai</button>`
+        : inCart
+          ? `<div class="qty-control" id="qty-${product.id}">
+               <button onclick="handleChangeQty('${product.id}', -1)">−</button>
+               <span>${cartItem.qty}</span>
+               <button onclick="handleChangeQty('${product.id}', 1)">+</button>
+             </div>`
+          : `<button class="add-btn" onclick="handleAddToCart('${product.id}')">
+               <i class="fas fa-plus"></i> Cart-ku Add Pannu
+             </button>`
+      }
+    </div>
+  `;
+  container.appendChild(card);
+}
+
+// ── Add to cart ───────────────────────────────
+async function handleAddToCart(productId) {
+  const user = auth.currentUser;
+  if (!user) {
+    showToast("Munna login pannunga! 🔐", "error");
+    setTimeout(() => window.location.href = "pages/login.html", 1500);
+    return;
+  }
+
+  const product = allProducts.find(p => p.id === productId);
+  if (!product) return;
+
+  // Disable button to prevent double-click
+  const btn = document.querySelector(`button[onclick="handleAddToCart('${productId}')"]`);
+  if (btn) btn.disabled = true;
+
+  cartItemsCache = await addToCart(product);
+  showToast(`${product.name} cart-la add achu! 🛒`);
+  renderProducts();
+}
+
+// ── Change quantity ───────────────────────────
+async function handleChangeQty(productId, delta) {
+  const item = cartItemsCache.find(i => i.id === productId);
+  if (!item) return;
+
+  const newQty = item.qty + delta;
+
+  // Optimistically update cache for instant UI
+  if (newQty <= 0) {
+    cartItemsCache = cartItemsCache.filter(i => i.id !== productId);
+    showToast("Cart-la irunthu remove achu! 🗑️", "error");
+  } else {
+    item.qty = newQty;
+  }
+
+  renderProducts(); // instant re-render from cache
+
+  // Then persist to Firestore
+  cartItemsCache = await updateQty(productId, newQty);
+}
+
+// ── Search ────────────────────────────────────
+document.getElementById("searchInput").addEventListener("input", renderProducts);
+
+// ── Profile button ────────────────────────────
+document.getElementById("profileBtn").addEventListener("click", () => {
+  const user = auth.currentUser;
+  if (user) window.location.href = "pages/profile.html";
+  else window.location.href = "pages/login.html";
+});
+</script>
+</body>
+</html>
