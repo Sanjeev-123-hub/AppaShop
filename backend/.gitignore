@@ -1,0 +1,16 @@
+# Secret environment variables — NEVER commit
+.env
+
+# Dependencies folder — reinstall with npm install
+node_modules/
+
+# Firebase service account key file
+config/serviceAccountKey.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
